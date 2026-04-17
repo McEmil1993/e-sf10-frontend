@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1,
+    "name": "admin",
+    "description": "Full access to all modules and configuration.",
+    "created_at": "2026-04-01T08:00:00Z",
+    "updated_at": "2026-04-01T08:00:00Z"
+  },
+  {
+    "id": 2,
+    "name": "teacher",
+    "description": "Can manage pupil records, grades, and related workflows.",
+    "created_at": "2026-04-02T08:00:00Z",
+    "updated_at": "2026-04-02T08:00:00Z"
+  },
+  {
+    "id": 3,
+    "name": "staff",
+    "description": "Handles enrollment, reports, and academic documentation.",
+    "created_at": "2026-04-03T08:00:00Z",
+    "updated_at": "2026-04-03T08:00:00Z"
+  },
+  {
+    "id": 4,
+    "name": "developer",
+    "description": "Full access for development, testing, and system configuration.",
+    "created_at": "2026-04-04T08:00:00Z",
+    "updated_at": "2026-04-04T08:00:00Z"
+  }
+]
