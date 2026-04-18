@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/components/Button/Button";
 import ConfirmModal from "@/app/components/Modal/ConfirmModal";
 import FormModal from "@/app/components/Modal/FormModal";
@@ -20,20 +20,8 @@ import type {
 } from "@/app/types/components/usersManagerTypes";
 import type { TableColumn } from "@/app/types/tableTypes";
 import type { AdminUser, UserFormValues, UserRole, UserStatus, UserTableRow } from "@/app/types/userTypes";
-import { formatDate, getRoleTone, getStatusTone } from "@/app/utils/mockData";
-
-const markdownEmailPattern = /^\[[^[\]]+\]\(mailto:([^)]+)\)$/i;
-
-function normalizeEmail(value: string) {
-  const trimmedValue = value.trim().toLowerCase();
-  const markdownMatch = trimmedValue.match(markdownEmailPattern);
-
-  if (markdownMatch) {
-    return markdownMatch[1].trim().toLowerCase();
-  }
-
-  return trimmedValue.replace(/^mailto:/i, "");
-}
+import { getRoleTone, getStatusTone } from "@/app/utils/mockData";
+import { createUsersResponse, normalizeUserRecord, toUserTableRow } from "@/app/utils/usersApi";
 
 function normalizeRoles(value: string) {
   return value
@@ -47,15 +35,6 @@ function buildFullName(values: Pick<UserFormValues, "first_name" | "middle_name"
     .map((value) => value.trim())
     .filter(Boolean)
     .join(" ");
-}
-
-function normalizeUserRecord(user: AdminUser): AdminUser {
-  return {
-    ...user,
-    email: normalizeEmail(user.email),
-    avatar: user.profile_picture ?? user.avatar ?? "",
-    roles: user.roles,
-  };
 }
 
 const initialUsers = (rawUsers as AdminUser[]).map(normalizeUserRecord);
@@ -347,10 +326,32 @@ function normalizeFormValues(user: AdminUser | null): UserFormValues {
 
 export default function UsersPage() {
   const [users, setUsers] = useState(initialUsers);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [dialogState, setDialogState] = useState<UsersDialogState | null>(null);
   const [deleteState, setDeleteState] = useState<UsersDeleteState | null>(null);
   const [statusState, setStatusState] = useState<UsersStatusState | null>(null);
   const [formValues, setFormValues] = useState<UserFormValues>(emptyFormValues);
+
+  const usersResponse = useMemo(
+    () =>
+      createUsersResponse(users, {
+        page: currentPage,
+        perPage: pageSize,
+        search: searchTerm,
+        sortBy: "created_at",
+        sortOrder: "desc",
+        basePath: "/api/users",
+      }),
+    [currentPage, pageSize, searchTerm, users],
+  );
+
+  useEffect(() => {
+    if (currentPage !== usersResponse.meta.page) {
+      setCurrentPage(usersResponse.meta.page);
+    }
+  }, [currentPage, usersResponse.meta.page]);
 
   const selectedRegion = useMemo(
     () => regions.find((region) => region.regionName === formValues.region || region.name === formValues.region) ?? null,
@@ -435,19 +436,8 @@ export default function UsersPage() {
   );
 
   const tableUsers: UserTableRow[] = useMemo(
-    () =>
-      users.map((user) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatar: user.profile_picture ?? user.avatar ?? "",
-        role: user.roles[0] ?? "user",
-        status: user.status,
-        username: user.username ?? "",
-        contact_number: user.contact_number ?? "",
-        created_at: formatDate(user.created_at),
-      })),
-    [users],
+    () => usersResponse.data.map(toUserTableRow),
+    [usersResponse.data],
   );
 
   function openAddModal() {
@@ -577,6 +567,7 @@ export default function UsersPage() {
           created_at: new Date().toISOString(),
         },
       ]);
+      setCurrentPage(1);
       closeDialog();
       return;
     }
@@ -710,12 +701,33 @@ export default function UsersPage() {
 
       <div className="space-y-3">
         <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">Users Table</h2>
           <Button onClick={openAddModal} size="sm">
             Add User
           </Button>
         </div>
-        <Table columns={columns} data={tableUsers} />
+        <Table
+          columns={columns}
+          data={tableUsers}
+          pagination={{
+            page: usersResponse.meta.page,
+            perPage: usersResponse.meta.per_page,
+            total: usersResponse.meta.total,
+            totalPages: usersResponse.meta.total_pages,
+            onPageChange: setCurrentPage,
+            onPageSizeChange: (value) => {
+              setPageSize(value);
+              setCurrentPage(1);
+            },
+          }}
+          search={{
+            value: searchTerm,
+            onChange: (value) => {
+              setSearchTerm(value);
+              setCurrentPage(1);
+            },
+          }}
+          searchPlaceholder="Search name, email, username, role, or status"
+        />
       </div>
 
       <FormModal

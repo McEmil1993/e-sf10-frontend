@@ -11,7 +11,7 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function itemHasActiveChild(pathname: string, item: NavItem) {
+function itemHasActiveChild(pathname: string, item: NavItem): boolean {
   return (item.children ?? []).some((child) => {
     if (child.href && isActivePath(pathname, child.href)) {
       return true;

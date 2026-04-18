@@ -28,6 +28,20 @@ export type TableColumn<T> = {
   headerClassName?: string;
 };
 
+export type TableSearchControl = {
+  value: string;
+  onChange: (value: string) => void;
+};
+
+export type TablePaginationControl = {
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+};
+
 export type TableProps<T> = {
   columns: TableColumn<T>[];
   data: T[];
@@ -37,4 +51,6 @@ export type TableProps<T> = {
   defaultPageSize?: number;
   pageSizeOptions?: number[];
   searchPlaceholder?: string;
+  search?: TableSearchControl;
+  pagination?: TablePaginationControl;
 };

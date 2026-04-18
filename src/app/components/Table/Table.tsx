@@ -157,29 +157,46 @@ export default function Table<T extends Record<string, unknown>>({
   rowKey,
   searchPlaceholder = "Search",
   showControls = true,
+  search,
+  pagination,
 }: TableProps<T>) {
   const [searchTerm, setSearchTerm] = useState("");
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [currentPage, setCurrentPage] = useState(1);
+  const isExternalPagination = Boolean(pagination);
+  const activeSearchTerm = search?.value ?? searchTerm;
+  const activePageSize = pagination?.perPage ?? pageSize;
 
-  const filteredData = data.filter((row) => getSearchValue(row).includes(searchTerm.toLowerCase()));
-  const totalEntries = filteredData.length;
-  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSize));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const startIndex = (safeCurrentPage - 1) * pageSize;
-  const paginatedData = filteredData.slice(startIndex, startIndex + pageSize);
-  const endIndex = totalEntries === 0 ? 0 : Math.min(startIndex + pageSize, totalEntries);
+  const filteredData = isExternalPagination
+    ? data
+    : data.filter((row) => getSearchValue(row).includes(activeSearchTerm.toLowerCase()));
+  const totalEntries = pagination?.total ?? filteredData.length;
+  const totalPages = pagination?.totalPages ?? Math.max(1, Math.ceil(totalEntries / activePageSize));
+  const safeCurrentPage = pagination?.page ?? Math.min(currentPage, totalPages);
+  const startIndex = totalEntries === 0 ? 0 : (safeCurrentPage - 1) * activePageSize;
+  const paginatedData = isExternalPagination
+    ? filteredData
+    : filteredData.slice(startIndex, startIndex + activePageSize);
+  const endIndex = totalEntries === 0 ? 0 : Math.min(startIndex + paginatedData.length, totalEntries);
   const paginationItems = getPaginationItems(safeCurrentPage, totalPages);
 
   useEffect(() => {
+    if (isExternalPagination) {
+      return;
+    }
+
     setCurrentPage(1);
-  }, [searchTerm, pageSize]);
+  }, [isExternalPagination, activeSearchTerm, activePageSize]);
 
   useEffect(() => {
+    if (isExternalPagination) {
+      return;
+    }
+
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
-  }, [currentPage, totalPages]);
+  }, [currentPage, isExternalPagination, totalPages]);
 
   return (
     <div className="overflow-hidden rounded-[5px] border border-border bg-card shadow-sm">
@@ -189,8 +206,17 @@ export default function Table<T extends Record<string, unknown>>({
             <span>Show</span>
             <select
               className="rounded-[5px] border border-border bg-card px-2 py-1.5 text-sm text-slate-700 outline-none"
-              onChange={(event) => setPageSize(Number(event.target.value))}
-              value={pageSize}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+
+                if (pagination?.onPageSizeChange) {
+                  pagination.onPageSizeChange(value);
+                  return;
+                }
+
+                setPageSize(value);
+              }}
+              value={activePageSize}
             >
               {pageSizeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -204,10 +230,17 @@ export default function Table<T extends Record<string, unknown>>({
             <span>Search:</span>
             <input
               className="w-full rounded-[5px] border border-border bg-card px-3 py-1.5 text-sm text-slate-700 outline-none sm:w-[220px]"
-              onChange={(event) => setSearchTerm(event.target.value)}
+              onChange={(event) => {
+                if (search) {
+                  search.onChange(event.target.value);
+                  return;
+                }
+
+                setSearchTerm(event.target.value);
+              }}
               placeholder={searchPlaceholder}
               type="search"
-              value={searchTerm}
+              value={activeSearchTerm}
             />
           </label>
         </div>
@@ -275,7 +308,14 @@ export default function Table<T extends Record<string, unknown>>({
             <button
               className="rounded-[5px] border border-border bg-card px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={safeCurrentPage === 1}
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              onClick={() => {
+                if (pagination) {
+                  pagination.onPageChange(Math.max(1, safeCurrentPage - 1));
+                  return;
+                }
+
+                setCurrentPage((page) => Math.max(1, page - 1));
+              }}
               type="button"
             >
               Previous
@@ -289,7 +329,14 @@ export default function Table<T extends Record<string, unknown>>({
                     : "border-border bg-card text-slate-700",
                 ].join(" ")}
                 key={page}
-                onClick={() => setCurrentPage(page)}
+                onClick={() => {
+                  if (pagination) {
+                    pagination.onPageChange(page);
+                    return;
+                  }
+
+                  setCurrentPage(page);
+                }}
                 type="button"
               >
                 {page}
@@ -298,7 +345,14 @@ export default function Table<T extends Record<string, unknown>>({
             <button
               className="rounded-[5px] border border-border bg-card px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={safeCurrentPage === totalPages || totalEntries === 0}
-              onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              onClick={() => {
+                if (pagination) {
+                  pagination.onPageChange(Math.min(totalPages, safeCurrentPage + 1));
+                  return;
+                }
+
+                setCurrentPage((page) => Math.min(totalPages, page + 1));
+              }}
               type="button"
             >
               Next
