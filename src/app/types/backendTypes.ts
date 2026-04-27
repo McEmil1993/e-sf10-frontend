@@ -53,6 +53,37 @@ export type BackendPupilResponseDto = {
   province: string;
   region: string;
   status: string;
+  profilePicture: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type BackendGuardianResponseDto = {
+  id: number;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  suffix: string | null;
+  contactNumber: string;
+  address: string;
+  barangay: string;
+  municipalityCity: string;
+  province: string;
+  region: string;
+  profilePicture: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type BackendPupilGuardianResponseDto = {
+  id: number;
+  pupilId: number;
+  guardianId: number;
+  relationship: string;
+  isPrimary: boolean;
+  guardian: BackendGuardianResponseDto;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

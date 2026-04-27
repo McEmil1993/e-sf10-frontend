@@ -82,6 +82,8 @@ export type FormModalProps = {
   bodyClassName?: string;
   footerClassName?: string;
   titleClassName?: string;
+  showBodyDivider?: boolean;
+  dividerAfterIndex?: number;
   onChange: (name: string, value: string) => void;
   onClose: () => void;
   onSubmit?: () => void;

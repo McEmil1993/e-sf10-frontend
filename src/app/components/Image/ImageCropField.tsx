@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Button from "@/app/components/Button/Button";
 import AuthenticatedImage from "@/app/components/Image/AuthenticatedImage";
 import Modal from "@/app/components/Modal/Modal";
@@ -339,182 +340,187 @@ export default function ImageCropField({
 
       {cropError ? <p className="text-xs text-rose-600">{cropError}</p> : null}
 
-      <Modal
-        description="Drag the image to reposition it, then adjust the zoom for a profile-style crop."
-        footer={
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <Button onClick={closeCropModal} variant="secondary">
-              Cancel
-            </Button>
-            <Button disabled={!cropMetrics || !imageSize} onClick={() => void applyCrop()}>
-              Apply Crop
-            </Button>
-          </div>
-        }
-        isOpen={Boolean(cropSource)}
-        onClose={closeCropModal}
-        size="xl"
-        title="Crop Profile Image"
-      >
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_280px]">
-          <div className="space-y-4">
-            <div className="rounded-[24px] border border-border bg-slate-950/90 p-5">
-              <div
-                className={[
-                  "relative mx-auto overflow-hidden bg-slate-900 shadow-inner",
-                  cropShape === "circle" ? "rounded-full" : "rounded-[24px]",
-                ].join(" ")}
-                onPointerDown={(event) => {
-                  if (!cropMetrics) {
-                    return;
-                  }
-
-                  dragStateRef.current = {
-                    pointerId: event.pointerId,
-                    startClientX: event.clientX,
-                    startClientY: event.clientY,
-                    startPanX: panX,
-                    startPanY: panY,
-                  };
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                }}
-                onPointerMove={(event) => {
-                  if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
-                    return;
-                  }
-
-                  updatePanFromPointerDelta(
-                    event.clientX - dragStateRef.current.startClientX,
-                    event.clientY - dragStateRef.current.startClientY,
-                  );
-                }}
-                onPointerUp={(event) => {
-                  if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
-                    return;
-                  }
-
-                  dragStateRef.current = null;
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                }}
-                onPointerLeave={(event) => {
-                  if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
-                    return;
-                  }
-
-                  dragStateRef.current = null;
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                }}
-                style={{
-                  height: `${frameHeight}px`,
-                  width: `${previewFrameWidth}px`,
-                }}
-              >
-                {cropSource ? (
-                  <img
-                    alt="Crop preview"
-                    className="absolute max-w-none select-none"
-                    draggable={false}
-                    onLoad={(event) => {
-                      setImageSize({
-                        width: event.currentTarget.naturalWidth,
-                        height: event.currentTarget.naturalHeight,
-                      });
-                    }}
-                    ref={cropImageRef}
-                    src={cropSource.objectUrl}
-                    style={
-                      cropMetrics
-                        ? {
-                            height: `${cropMetrics.drawHeight}px`,
-                            left: `${cropMetrics.drawLeft}px`,
-                            top: `${cropMetrics.drawTop}px`,
-                            width: `${cropMetrics.drawWidth}px`,
-                          }
-                        : undefined
-                    }
-                  />
-                ) : null}
-              </div>
-            </div>
-
-            <div className="grid gap-4 rounded-[20px] border border-border bg-slate-50 p-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700">
-                  <span>Zoom</span>
-                  <span>{zoom.toFixed(2)}x</span>
+      {typeof document !== "undefined"
+        ? createPortal(
+            <Modal
+              description="Drag the image to reposition it, then adjust the zoom for a profile-style crop."
+              footer={
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <Button onClick={closeCropModal} variant="secondary">
+                    Cancel
+                  </Button>
+                  <Button disabled={!cropMetrics || !imageSize} onClick={() => void applyCrop()}>
+                    Apply Crop
+                  </Button>
                 </div>
-                <input
-                  className="w-full accent-primary"
-                  max="3"
-                  min="1"
-                  onChange={(event) => setZoom(Number(event.target.value))}
-                  step="0.01"
-                  type="range"
-                  value={zoom}
-                />
-              </div>
+              }
+              isOpen={Boolean(cropSource)}
+              onClose={closeCropModal}
+              size="xl"
+              title="Crop Profile Image"
+            >
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_280px]">
+                <div className="space-y-4">
+                  <div className="rounded-[24px] border border-border bg-slate-950/90 p-5">
+                    <div
+                      className={[
+                        "relative mx-auto overflow-hidden bg-slate-900 shadow-inner",
+                        cropShape === "circle" ? "rounded-full" : "rounded-[24px]",
+                      ].join(" ")}
+                      onPointerDown={(event) => {
+                        if (!cropMetrics) {
+                          return;
+                        }
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted">Drag the image inside the frame to position the crop.</p>
-                <Button onClick={resetCropControls} size="sm" variant="secondary">
-                  Reset
-                </Button>
-              </div>
-            </div>
-          </div>
+                        dragStateRef.current = {
+                          pointerId: event.pointerId,
+                          startClientX: event.clientX,
+                          startClientY: event.clientY,
+                          startPanX: panX,
+                          startPanY: panY,
+                        };
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                      }}
+                      onPointerMove={(event) => {
+                        if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
+                          return;
+                        }
 
-          <div className="space-y-4 rounded-[24px] border border-border bg-white p-5">
-            <div className="space-y-1">
-              <h3 className="text-lg font-semibold text-slate-950">Profile Preview</h3>
-              <p className="text-sm text-muted">This is how the cropped image will look as an avatar.</p>
-            </div>
+                        updatePanFromPointerDelta(
+                          event.clientX - dragStateRef.current.startClientX,
+                          event.clientY - dragStateRef.current.startClientY,
+                        );
+                      }}
+                      onPointerUp={(event) => {
+                        if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
+                          return;
+                        }
 
-            <div className="flex justify-center rounded-[20px] bg-slate-50 p-6">
-              <div className="relative h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-sm ring-1 ring-slate-200">
-                {cropSource ? (
-                  <img
-                    alt="Avatar preview"
-                    className="absolute max-w-none select-none"
-                    draggable={false}
-                    src={cropSource.objectUrl}
-                    style={
-                      cropMetrics
-                        ? {
-                            height: `${(cropMetrics.drawHeight / frameHeight) * 112}px`,
-                            left: `${(cropMetrics.drawLeft / previewFrameWidth) * 112}px`,
-                            top: `${(cropMetrics.drawTop / frameHeight) * 112}px`,
-                            width: `${(cropMetrics.drawWidth / previewFrameWidth) * 112}px`,
+                        dragStateRef.current = null;
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }}
+                      onPointerLeave={(event) => {
+                        if (!dragStateRef.current || dragStateRef.current.pointerId !== event.pointerId) {
+                          return;
+                        }
+
+                        dragStateRef.current = null;
+                        event.currentTarget.releasePointerCapture(event.pointerId);
+                      }}
+                      style={{
+                        height: `${frameHeight}px`,
+                        width: `${previewFrameWidth}px`,
+                      }}
+                    >
+                      {cropSource ? (
+                        <img
+                          alt="Crop preview"
+                          className="absolute max-w-none select-none"
+                          draggable={false}
+                          onLoad={(event) => {
+                            setImageSize({
+                              width: event.currentTarget.naturalWidth,
+                              height: event.currentTarget.naturalHeight,
+                            });
+                          }}
+                          ref={cropImageRef}
+                          src={cropSource.objectUrl}
+                          style={
+                            cropMetrics
+                              ? {
+                                  height: `${cropMetrics.drawHeight}px`,
+                                  left: `${cropMetrics.drawLeft}px`,
+                                  top: `${cropMetrics.drawTop}px`,
+                                  width: `${cropMetrics.drawWidth}px`,
+                                }
+                              : undefined
                           }
-                        : undefined
-                    }
-                  />
-                ) : null}
-              </div>
-            </div>
+                        />
+                      ) : null}
+                    </div>
+                  </div>
 
-            <dl className="space-y-3 text-sm">
-              <div className="rounded-[16px] bg-slate-50 px-4 py-3">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Shape</dt>
-                <dd className="mt-1 font-medium text-slate-800">
-                  {cropShape === "circle" ? "Circle avatar crop" : "Square crop"}
-                </dd>
+                  <div className="grid gap-4 rounded-[20px] border border-border bg-slate-50 p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700">
+                        <span>Zoom</span>
+                        <span>{zoom.toFixed(2)}x</span>
+                      </div>
+                      <input
+                        className="w-full accent-primary"
+                        max="3"
+                        min="1"
+                        onChange={(event) => setZoom(Number(event.target.value))}
+                        step="0.01"
+                        type="range"
+                        value={zoom}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-muted">Drag the image inside the frame to position the crop.</p>
+                      <Button onClick={resetCropControls} size="sm" variant="secondary">
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-[24px] border border-border bg-white p-5">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-semibold text-slate-950">Profile Preview</h3>
+                    <p className="text-sm text-muted">This is how the cropped image will look as an avatar.</p>
+                  </div>
+
+                  <div className="flex justify-center rounded-[20px] bg-slate-50 p-6">
+                    <div className="relative h-28 w-28 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-sm ring-1 ring-slate-200">
+                      {cropSource ? (
+                        <img
+                          alt="Avatar preview"
+                          className="absolute max-w-none select-none"
+                          draggable={false}
+                          src={cropSource.objectUrl}
+                          style={
+                            cropMetrics
+                              ? {
+                                  height: `${(cropMetrics.drawHeight / frameHeight) * 112}px`,
+                                  left: `${(cropMetrics.drawLeft / previewFrameWidth) * 112}px`,
+                                  top: `${(cropMetrics.drawTop / frameHeight) * 112}px`,
+                                  width: `${(cropMetrics.drawWidth / previewFrameWidth) * 112}px`,
+                                }
+                              : undefined
+                          }
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <dl className="space-y-3 text-sm">
+                    <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Shape</dt>
+                      <dd className="mt-1 font-medium text-slate-800">
+                        {cropShape === "circle" ? "Circle avatar crop" : "Square crop"}
+                      </dd>
+                    </div>
+                    <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Output</dt>
+                      <dd className="mt-1 font-medium text-slate-800">
+                        {previewOutputWidth} x {Math.round(previewOutputWidth / cropAspect)}
+                      </dd>
+                    </div>
+                    <div className="rounded-[16px] bg-slate-50 px-4 py-3">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Source File</dt>
+                      <dd className="mt-1 truncate font-medium text-slate-800">
+                        {cropSource?.fileName ?? "No file selected"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
-              <div className="rounded-[16px] bg-slate-50 px-4 py-3">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Output</dt>
-                <dd className="mt-1 font-medium text-slate-800">
-                  {previewOutputWidth} x {Math.round(previewOutputWidth / cropAspect)}
-                </dd>
-              </div>
-              <div className="rounded-[16px] bg-slate-50 px-4 py-3">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Source File</dt>
-                <dd className="mt-1 truncate font-medium text-slate-800">
-                  {cropSource?.fileName ?? "No file selected"}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-      </Modal>
+            </Modal>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

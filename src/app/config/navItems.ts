@@ -60,6 +60,11 @@ export const mainNavItems: NavItem[] = [
         description: "Manage user access",
       },
       {
+        label: "Guardians",
+        href: "/guardians",
+        description: "Manage guardian records",
+      },
+      {
         label: "Roles & Permissions",
         href: "/roles-permissions",
         description: "Manage access levels",

@@ -18,6 +18,8 @@ export type PupilRecord = {
   province: string;
   region: string;
   status: PupilStatus;
+  avatar?: string;
+  profile_picture?: string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -27,6 +29,7 @@ export type PupilTableRow = {
   id: number;
   full_name: string;
   lrn: string;
+  avatar?: string;
   sex: string;
   birthdate: string;
   location: string;
@@ -84,6 +87,7 @@ export type PupilsQueryOptions = {
 };
 
 export type PupilFormValues = {
+  profile_picture: string;
   lrn: string;
   first_name: string;
   middle_name: string;

@@ -39,6 +39,7 @@ export function toPupilTableRow(pupil: PupilRecord): PupilTableRow {
     id: pupil.id,
     full_name: pupil.full_name,
     lrn: pupil.lrn,
+    avatar: pupil.avatar ?? "",
     sex: pupil.sex,
     birthdate: formatDate(pupil.birthdate),
     location: [pupil.barangay, pupil.city_municipality, pupil.province].filter(Boolean).join(", "),

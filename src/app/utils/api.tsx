@@ -4,14 +4,21 @@ import type { SessionUser } from "@/app/types/authTypes";
 import type {
   BackendApiResponse,
   BackendAuthResponseDto,
+  BackendGuardianResponseDto,
   BackendModuleResponseDto,
   BackendPermissionResponseDto,
+  BackendPupilGuardianResponseDto,
   BackendPupilResponseDto,
   BackendPositionResponseDto,
   BackendRoleResponseDto,
   BackendUserResponseDto,
 } from "@/app/types/backendTypes";
 import type { AppIconName } from "@/app/types/iconTypes";
+import type { GuardianRecord } from "@/app/types/guardianTypes";
+import type {
+  PupilGuardianRecord,
+  PupilGuardianRelationFormValues,
+} from "@/app/types/pupilGuardianTypes";
 import type { PupilRecord, PupilSex, PupilStatus } from "@/app/types/pupilTypes";
 import type { AdminUser, ChangePasswordPayload, UserSex, UserStatus } from "@/app/types/userTypes";
 
@@ -248,6 +255,8 @@ function mapBackendPupilToPupilRecord(pupil: BackendPupilResponseDto): PupilReco
   const middleName = pupil.middleName?.trim() ?? "";
   const lastName = pupil.lastName.trim();
   const suffix = pupil.suffix?.trim() ?? "";
+  const storedProfilePicture = toStoredAssetPath(pupil.profilePicture ?? "");
+  const profilePicture = resolveBackendAssetUrl(storedProfilePicture);
 
   return {
     id: pupil.id,
@@ -266,9 +275,56 @@ function mapBackendPupilToPupilRecord(pupil: BackendPupilResponseDto): PupilReco
     province: pupil.province.trim(),
     region: pupil.region.trim(),
     status: normalizePupilStatus(pupil.status),
+    avatar: profilePicture,
+    profile_picture: storedProfilePicture,
     created_at: pupil.createdAt,
     updated_at: pupil.updatedAt,
     deleted_at: pupil.deletedAt,
+  };
+}
+
+function mapBackendGuardianToGuardianRecord(guardian: BackendGuardianResponseDto): GuardianRecord {
+  const firstName = guardian.firstName.trim();
+  const middleName = guardian.middleName?.trim() ?? "";
+  const lastName = guardian.lastName.trim();
+  const suffix = guardian.suffix?.trim() ?? "";
+  const storedProfilePicture = toStoredAssetPath(guardian.profilePicture ?? "");
+  const profilePicture = resolveBackendAssetUrl(storedProfilePicture);
+
+  return {
+    id: guardian.id,
+    full_name: buildFullNameFromParts([firstName, middleName, lastName, suffix]) || firstName || lastName,
+    first_name: firstName,
+    middle_name: middleName,
+    last_name: lastName,
+    suffix,
+    contact_number: guardian.contactNumber.trim(),
+    address: guardian.address.trim(),
+    barangay: guardian.barangay.trim(),
+    municipality_city: guardian.municipalityCity.trim(),
+    province: guardian.province.trim(),
+    region: guardian.region.trim(),
+    avatar: profilePicture,
+    profile_picture: storedProfilePicture,
+    created_at: guardian.createdAt,
+    updated_at: guardian.updatedAt,
+    deleted_at: guardian.deletedAt,
+  };
+}
+
+function mapBackendPupilGuardianToPupilGuardianRecord(
+  relation: BackendPupilGuardianResponseDto,
+): PupilGuardianRecord {
+  return {
+    id: relation.id,
+    pupil_id: relation.pupilId,
+    guardian_id: relation.guardianId,
+    relationship: relation.relationship.trim(),
+    is_primary: Boolean(relation.isPrimary),
+    guardian: mapBackendGuardianToGuardianRecord(relation.guardian),
+    created_at: relation.createdAt,
+    updated_at: relation.updatedAt,
+    deleted_at: relation.deletedAt,
   };
 }
 
@@ -381,7 +437,7 @@ export async function uploadFile(file: File, token?: string) {
   });
 }
 
-async function prepareUserProfilePictureValue(value: unknown, token?: string) {
+async function prepareProfilePictureValue(value: unknown, token?: string) {
   if (typeof value !== "string") {
     return value;
   }
@@ -410,13 +466,66 @@ async function prepareUserPayload(
   const nextPayload = { ...payload };
 
   if ("profile_picture" in nextPayload) {
-    nextPayload.profile_picture = await prepareUserProfilePictureValue(
+    nextPayload.profile_picture = await prepareProfilePictureValue(
       nextPayload.profile_picture,
       token,
     );
   }
 
   return mapUserPayloadToBackend(nextPayload, mode);
+}
+
+async function preparePupilPayload(
+  payload: Record<string, unknown>,
+  mode: "create" | "update",
+  token?: string,
+) {
+  const nextPayload = { ...payload };
+
+  if ("profile_picture" in nextPayload) {
+    nextPayload.profile_picture = await prepareProfilePictureValue(
+      nextPayload.profile_picture,
+      token,
+    );
+  }
+
+  return mapPupilPayloadToBackend(nextPayload, mode);
+}
+
+async function prepareGuardianPayload(
+  payload: Record<string, unknown>,
+  mode: "create" | "update",
+  token?: string,
+) {
+  const nextPayload = { ...payload };
+
+  if ("profile_picture" in nextPayload) {
+    nextPayload.profile_picture = await prepareProfilePictureValue(
+      nextPayload.profile_picture,
+      token,
+    );
+  }
+
+  return mapGuardianPayloadToBackend(nextPayload, mode);
+}
+
+async function preparePupilGuardianPayload(
+  payload: Record<string, unknown>,
+  token?: string,
+) {
+  const nextPayload = { ...payload };
+  const hasExistingGuardianId =
+    ("guardian_id" in nextPayload && typeof nextPayload.guardian_id === "string" && nextPayload.guardian_id.trim().length > 0) ||
+    ("guardian_id" in nextPayload && typeof nextPayload.guardian_id === "number" && Number.isInteger(nextPayload.guardian_id));
+
+  if (!hasExistingGuardianId && "profile_picture" in nextPayload) {
+    nextPayload.profile_picture = await prepareProfilePictureValue(
+      nextPayload.profile_picture,
+      token,
+    );
+  }
+
+  return mapPupilGuardianPayloadToBackend(nextPayload);
 }
 
 function mapBackendRoleToAppRole(role: BackendRoleResponseDto): AppRole {
@@ -636,7 +745,104 @@ function mapPupilPayloadToBackend(payload: Record<string, unknown>, mode: "creat
     backendPayload.status = toNullableString(payload.status)?.toLowerCase() ?? null;
   }
 
+  if (mode === "create" || "profile_picture" in payload) {
+    backendPayload.profilePicture = toNullableString(payload.profile_picture);
+  }
+
   return backendPayload;
+}
+
+function mapGuardianPayloadToBackend(payload: Record<string, unknown>, mode: "create" | "update") {
+  const backendPayload: Record<string, unknown> = {};
+
+  if (mode === "create" || "first_name" in payload) {
+    backendPayload.firstName = toNullableString(payload.first_name);
+  }
+
+  if (mode === "create" || "middle_name" in payload) {
+    backendPayload.middleName = toNullableString(payload.middle_name);
+  }
+
+  if (mode === "create" || "last_name" in payload) {
+    backendPayload.lastName = toNullableString(payload.last_name);
+  }
+
+  if (mode === "create" || "suffix" in payload) {
+    backendPayload.suffix = toNullableString(payload.suffix);
+  }
+
+  if (mode === "create" || "contact_number" in payload) {
+    backendPayload.contactNumber = toNullableString(payload.contact_number);
+  }
+
+  if (mode === "create" || "address" in payload) {
+    backendPayload.address = toNullableString(payload.address);
+  }
+
+  if (mode === "create" || "barangay" in payload) {
+    backendPayload.barangay = toNullableString(payload.barangay);
+  }
+
+  if (mode === "create" || "municipality_city" in payload) {
+    backendPayload.municipalityCity = toNullableString(payload.municipality_city);
+  }
+
+  if (mode === "create" || "province" in payload) {
+    backendPayload.province = toNullableString(payload.province);
+  }
+
+  if (mode === "create" || "region" in payload) {
+    backendPayload.region = toNullableString(payload.region);
+  }
+
+  if (mode === "create" || "profile_picture" in payload) {
+    backendPayload.profilePicture = toNullableString(payload.profile_picture);
+  }
+
+  return backendPayload;
+}
+
+function mapPupilGuardianPayloadToBackend(payload: Record<string, unknown>) {
+  const rawGuardianId = payload.guardian_id;
+  const guardianId =
+    typeof rawGuardianId === "number"
+      ? rawGuardianId
+      : typeof rawGuardianId === "string" && rawGuardianId.trim()
+        ? Number(rawGuardianId)
+        : null;
+
+  if (typeof guardianId === "number" && Number.isInteger(guardianId) && guardianId > 0) {
+    return {
+      guardianId,
+      relationship: toNullableString(payload.relationship) ?? "",
+      isPrimary:
+        typeof payload.is_primary === "boolean"
+          ? payload.is_primary
+          : typeof payload.is_primary === "string"
+            ? payload.is_primary.trim().toLowerCase() === "true"
+            : Boolean(payload.is_primary),
+    };
+  }
+
+  return {
+    ...mapGuardianPayloadToBackend(payload, "create"),
+    relationship: toNullableString(payload.relationship) ?? "",
+    isPrimary:
+      typeof payload.is_primary === "boolean"
+        ? payload.is_primary
+        : typeof payload.is_primary === "string"
+          ? payload.is_primary.trim().toLowerCase() === "true"
+          : Boolean(payload.is_primary),
+  };
+}
+
+function mapPupilGuardianRelationPayloadToBackend(
+  payload: Pick<PupilGuardianRelationFormValues, "relationship" | "is_primary">,
+) {
+  return {
+    relationship: toNullableString(payload.relationship) ?? "",
+    isPrimary: payload.is_primary.trim().toLowerCase() === "true",
+  };
 }
 
 export function toSessionUser(user: AdminUser): SessionUser {
@@ -918,10 +1124,18 @@ export async function listPupils(token?: string) {
   return pupils.map(mapBackendPupilToPupilRecord);
 }
 
+export async function getPupil(pupilId: number, token?: string) {
+  const pupil = await requestAuthenticatedApi<BackendPupilResponseDto>(`/pupils/${pupilId}`, {
+    token,
+  });
+
+  return mapBackendPupilToPupilRecord(pupil);
+}
+
 export async function createPupil(payload: Record<string, unknown>, token?: string) {
   const pupil = await requestAuthenticatedApi<BackendPupilResponseDto>("/pupils", {
     method: "POST",
-    body: mapPupilPayloadToBackend(payload, "create"),
+    body: await preparePupilPayload(payload, "create", token),
     token,
   });
 
@@ -931,7 +1145,7 @@ export async function createPupil(payload: Record<string, unknown>, token?: stri
 export async function updatePupil(pupilId: number, payload: Record<string, unknown>, token?: string) {
   const pupil = await requestAuthenticatedApi<BackendPupilResponseDto>(`/pupils/${pupilId}`, {
     method: "PUT",
-    body: mapPupilPayloadToBackend(payload, "update"),
+    body: await preparePupilPayload(payload, "update", token),
     token,
   });
 
@@ -940,6 +1154,93 @@ export async function updatePupil(pupilId: number, payload: Record<string, unkno
 
 export async function deletePupil(pupilId: number, token?: string) {
   await requestAuthenticatedApi(`/pupils/${pupilId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function listPupilGuardians(pupilId: number, token?: string) {
+  const relations = await requestAuthenticatedApi<BackendPupilGuardianResponseDto[]>(
+    `/pupils/${pupilId}/guardians`,
+    { token },
+  );
+
+  return relations.map(mapBackendPupilGuardianToPupilGuardianRecord);
+}
+
+export async function createPupilGuardian(
+  pupilId: number,
+  payload: Record<string, unknown>,
+  token?: string,
+) {
+  const relation = await requestAuthenticatedApi<BackendPupilGuardianResponseDto>(
+    `/pupils/${pupilId}/guardians`,
+    {
+      method: "POST",
+      body: await preparePupilGuardianPayload(payload, token),
+      token,
+    },
+  );
+
+  return mapBackendPupilGuardianToPupilGuardianRecord(relation);
+}
+
+export async function updatePupilGuardian(
+  pupilId: number,
+  relationId: number,
+  payload: Pick<PupilGuardianRelationFormValues, "relationship" | "is_primary">,
+  token?: string,
+) {
+  const relation = await requestAuthenticatedApi<BackendPupilGuardianResponseDto>(
+    `/pupils/${pupilId}/guardians/${relationId}`,
+    {
+      method: "PUT",
+      body: mapPupilGuardianRelationPayloadToBackend(payload),
+      token,
+    },
+  );
+
+  return mapBackendPupilGuardianToPupilGuardianRecord(relation);
+}
+
+export async function deletePupilGuardian(
+  pupilId: number,
+  relationId: number,
+  token?: string,
+) {
+  await requestAuthenticatedApi(`/pupils/${pupilId}/guardians/${relationId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function listGuardians(token?: string) {
+  const guardians = await requestAuthenticatedApi<BackendGuardianResponseDto[]>("/guardians", { token });
+  return guardians.map(mapBackendGuardianToGuardianRecord);
+}
+
+export async function createGuardian(payload: Record<string, unknown>, token?: string) {
+  const guardian = await requestAuthenticatedApi<BackendGuardianResponseDto>("/guardians", {
+    method: "POST",
+    body: await prepareGuardianPayload(payload, "create", token),
+    token,
+  });
+
+  return mapBackendGuardianToGuardianRecord(guardian);
+}
+
+export async function updateGuardian(guardianId: number, payload: Record<string, unknown>, token?: string) {
+  const guardian = await requestAuthenticatedApi<BackendGuardianResponseDto>(`/guardians/${guardianId}`, {
+    method: "PUT",
+    body: await prepareGuardianPayload(payload, "update", token),
+    token,
+  });
+
+  return mapBackendGuardianToGuardianRecord(guardian);
+}
+
+export async function deleteGuardian(guardianId: number, token?: string) {
+  await requestAuthenticatedApi(`/guardians/${guardianId}`, {
     method: "DELETE",
     token,
   });

@@ -306,6 +306,9 @@ export default function FormModal({
   title,
   titleClassName,
   values,
+  showBodyDivider = false,
+  dividerAfterIndex,
+  
 }: FormModalProps) {
   const isViewMode = mode === "view";
   const resolvedGridClassName =
@@ -334,18 +337,38 @@ export default function FormModal({
       titleClassName={titleClassName}
     >
       <div className={["grid gap-x-4 gap-y-3.5", resolvedGridClassName].join(" ")}>
-        {fields.map((field) => (
-          <div
-            className={[
-              fieldClassName ?? "space-y-1.5",
-              field.layoutClassName ??
-                (field.colSpan === 2 ? (columns === 3 ? "xl:col-span-2" : "md:col-span-2") : ""),
-            ].join(" ")}
-            key={field.name}
-          >
-            <span className={labelClassName ?? "text-[14px] font-semibold text-slate-700"}>{field.label}</span>
-            {renderField(field, isViewMode, values[field.name] ?? "", onChange)}
-            {field.helperText ? <p className="text-xs text-muted">{field.helperText}</p> : null}
+        {fields.map((field, index) => (
+          <div key={field.name} className="contents">
+            
+            {/* FIELD */}
+            <div
+              className={[
+                fieldClassName ?? "space-y-1.5",
+                field.layoutClassName ??
+                  (field.colSpan === 2
+                    ? columns === 3
+                      ? "xl:col-span-2"
+                      : "md:col-span-2"
+                    : ""),
+              ].join(" ")}
+            >
+              <span className={labelClassName ?? "text-[14px] font-semibold text-slate-700"}>
+                {field.label}
+              </span>
+
+              {renderField(field, isViewMode, values[field.name] ?? "", onChange)}
+
+              {field.helperText ? (
+                <p className="text-xs text-muted">{field.helperText}</p>
+              ) : null}
+            </div>
+
+            {/* DIVIDER */}
+            {showBodyDivider && dividerAfterIndex === index && (
+              <div className="col-span-full">
+                <hr className="my-2 border-border opacity-60" />
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -27,6 +27,27 @@ export function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+export function getAgeFromBirthdate(value: string) {
+  const birthdate = new Date(value);
+
+  if (Number.isNaN(birthdate.getTime())) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthdate.getFullYear();
+  const monthDifference = today.getMonth() - birthdate.getMonth();
+
+  if (
+    monthDifference < 0 ||
+    (monthDifference === 0 && today.getDate() < birthdate.getDate())
+  ) {
+    age -= 1;
+  }
+
+  return Math.max(age, 0);
+}
+
 export function getInitials(name: string) {
   return name
     .split(" ")

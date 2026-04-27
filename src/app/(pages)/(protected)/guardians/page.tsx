@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import Button from "@/app/components/Button/Button";
 import { DeleteIcon, EditIcon, ViewIcon } from "@/app/components/Icon/UserActionIcons";
 import ConfirmModal from "@/app/components/Modal/ConfirmModal";
@@ -16,40 +15,29 @@ import rawRegions from "@/app/data/regions.json";
 import rawSuffixes from "@/app/data/suffixes.json";
 import type { ModalField, ModalFieldOption } from "@/app/types/components/modalTypes";
 import type { ToastItem } from "@/app/types/components/toastTypes";
-import type { PupilFormValues, PupilRecord, PupilStatus, PupilTableRow } from "@/app/types/pupilTypes";
+import type {
+  GuardianFormValues,
+  GuardianRecord,
+  GuardianTableRow,
+} from "@/app/types/guardianTypes";
 import type { TableColumn } from "@/app/types/tableTypes";
-import { createPupil, deletePupil, listPupils, updatePupil } from "@/app/utils/api";
-import { createPupilsResponse, normalizePupilRecord, toPupilTableRow } from "@/app/utils/pupilsApi";
+import { createGuardian, deleteGuardian, listGuardians, updateGuardian } from "@/app/utils/api";
+import {
+  createGuardiansResponse,
+  normalizeGuardianRecord,
+  toGuardianTableRow,
+} from "@/app/utils/guardiansApi";
 
 type DialogMode = "add" | "view" | "edit";
 
-type PupilDialogState = {
+type GuardianDialogState = {
   mode: DialogMode;
-  pupilId: number | null;
+  guardianId: number | null;
 };
 
-type PupilDeleteState = {
-  pupilId: number;
+type GuardianDeleteState = {
+  guardianId: number;
 };
-
-const statusToneMap = {
-  active: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  inactive: "bg-amber-50 text-amber-700 ring-amber-100",
-  transferred: "bg-sky-50 text-sky-700 ring-sky-100",
-  graduated: "bg-slate-100 text-slate-700 ring-slate-200",
-};
-
-const sexOptions: ModalFieldOption[] = [
-  { label: "Male", value: "male" },
-  { label: "Female", value: "female" },
-];
-
-const statusOptions: ModalFieldOption[] = [
-  { label: "Active", value: "active" },
-  { label: "Inactive", value: "inactive" },
-  { label: "Transferred", value: "transferred" },
-  { label: "Graduated", value: "graduated" },
-];
 
 const suffixOptions: ModalFieldOption[] = (rawSuffixes as string[]).map((suffix) => ({
   label: suffix,
@@ -77,22 +65,18 @@ const regionOptions: ModalFieldOption[] = regions.map((region) => ({
   value: region.regionName,
 }));
 
-const emptyFormValues: PupilFormValues = {
+const emptyFormValues: GuardianFormValues = {
   profile_picture: "",
-  lrn: "",
   first_name: "",
   middle_name: "",
   last_name: "",
   suffix: "",
-  sex: "male",
-  birthdate: "",
-  birthplace: "",
-  street_address: "",
+  contact_number: "",
+  address: "",
   barangay: "",
-  city_municipality: "",
+  municipality_city: "",
   province: "Bohol",
   region: "Region VII",
-  status: "active",
 };
 
 function createToastId() {
@@ -103,11 +87,11 @@ function createToastId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function normalizeLrnInput(value: string) {
+function normalizeContactNumberInput(value: string) {
   return value.replace(/\D/g, "").slice(0, 20);
 }
 
-function buildPupilFields(
+function buildGuardianFields(
   provinceOptions: ModalFieldOption[],
   cityMunicipalityOptions: ModalFieldOption[],
   barangayOptions: ModalFieldOption[],
@@ -124,24 +108,9 @@ function buildPupilFields(
       layoutClassName: "md:col-span-6 xl:col-span-6",
     },
     {
-      name: "lrn",
-      label: "LRN",
-      placeholder: "123456789012",
-      required: true,
-      helperText: "Enter digits only, up to 20 characters.",
-      layoutClassName: "md:col-span-3 xl:col-span-3",
-    },
-    {
-      name: "status",
-      label: "Status",
-      type: "select",
-      options: statusOptions,
-      layoutClassName: "md:col-span-3 xl:col-span-3",
-    },
-    {
       name: "first_name",
       label: "First Name",
-      placeholder: "Juan",
+      placeholder: "Maria",
       required: true,
       layoutClassName: "md:col-span-3 xl:col-span-3",
     },
@@ -161,30 +130,18 @@ function buildPupilFields(
     {
       name: "suffix",
       label: "Suffix",
-      placeholder: "Jr.",
+      placeholder: "Sr.",
       type: "lookup",
       options: suffixOptions,
-      layoutClassName: "md:col-span-3 xl:col-span-3",
+      layoutClassName: "md:col-span-3 xl:col-span-2",
     },
     {
-      name: "sex",
-      label: "Sex",
-      type: "select",
-      options: sexOptions,
-      layoutClassName: "md:col-span-3 xl:col-span-3",
-    },
-    {
-      name: "birthdate",
-      label: "Birthdate",
-      type: "date",
+      name: "contact_number",
+      label: "Contact Number",
+      placeholder: "09171234567",
       required: true,
-      layoutClassName: "md:col-span-3 xl:col-span-3",
-    },
-    {
-      name: "birthplace",
-      label: "Birthplace",
-      placeholder: "Talisay City",
-      layoutClassName: "md:col-span-6 xl:col-span-6",
+      helperText: "Enter 7 to 20 digits only.",
+      layoutClassName: "md:col-span-3 xl:col-span-4",
     },
     {
       name: "region",
@@ -203,7 +160,7 @@ function buildPupilFields(
       layoutClassName: "md:col-span-6 xl:col-span-4",
     },
     {
-      name: "city_municipality",
+      name: "municipality_city",
       label: "Municipality / City",
       type: "lookup",
       options: cityMunicipalityOptions,
@@ -219,77 +176,73 @@ function buildPupilFields(
       layoutClassName: "md:col-span-6 xl:col-span-4",
     },
     {
-      name: "street_address",
-      label: "Street Address",
-      placeholder: "Purok 1, San Isidro",
-      layoutClassName: "md:col-span-6 xl:col-span-8",
+      name: "address",
+      label: "Address",
+      placeholder: "Street and house details",
+      required: true,
+      layoutClassName: "md:col-span-6 xl:col-span-4",
     },
   ];
 }
 
-function normalizeFormValues(pupil: PupilRecord | null): PupilFormValues {
-  if (!pupil) {
+function normalizeFormValues(guardian: GuardianRecord | null): GuardianFormValues {
+  if (!guardian) {
     return emptyFormValues;
   }
 
   return {
-    profile_picture: pupil.profile_picture ?? pupil.avatar ?? "",
-    lrn: pupil.lrn,
-    first_name: pupil.first_name,
-    middle_name: pupil.middle_name ?? "",
-    last_name: pupil.last_name,
-    suffix: pupil.suffix ?? "",
-    sex: pupil.sex,
-    birthdate: pupil.birthdate,
-    birthplace: pupil.birthplace ?? "",
-    street_address: pupil.street_address ?? "",
-    barangay: pupil.barangay,
-    city_municipality: pupil.city_municipality,
-    province: pupil.province,
-    region: pupil.region,
-    status: pupil.status,
+    profile_picture: guardian.profile_picture ?? guardian.avatar ?? "",
+    first_name: guardian.first_name,
+    middle_name: guardian.middle_name ?? "",
+    last_name: guardian.last_name,
+    suffix: guardian.suffix ?? "",
+    contact_number: guardian.contact_number,
+    address: guardian.address,
+    barangay: guardian.barangay,
+    municipality_city: guardian.municipality_city,
+    province: guardian.province,
+    region: guardian.region,
   };
 }
 
-export default function PupilsInformationPage() {
-  const router = useRouter();
-  const [pupils, setPupils] = useState<PupilRecord[]>([]);
+export default function GuardiansPage() {
+  const [guardians, setGuardians] = useState<GuardianRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [dialogState, setDialogState] = useState<PupilDialogState | null>(null);
-  const [deleteState, setDeleteState] = useState<PupilDeleteState | null>(null);
-  const [formValues, setFormValues] = useState<PupilFormValues>(emptyFormValues);
+  const [dialogState, setDialogState] = useState<GuardianDialogState | null>(null);
+  const [deleteState, setDeleteState] = useState<GuardianDeleteState | null>(null);
+  const [formValues, setFormValues] = useState<GuardianFormValues>(emptyFormValues);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const pupilsResponse = useMemo(
+  const guardiansResponse = useMemo(
     () =>
-      createPupilsResponse(pupils, {
+      createGuardiansResponse(guardians, {
         page: currentPage,
         perPage: pageSize,
         search: searchTerm,
         sortBy: "created_at",
         sortOrder: "desc",
-        basePath: "/pupils/information",
+        basePath: "/guardians",
       }),
-    [currentPage, pageSize, pupils, searchTerm],
+    [currentPage, guardians, pageSize, searchTerm],
   );
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadPupils() {
+    async function loadGuardians() {
       try {
         setIsLoading(true);
-        const pupilData = await listPupils();
+        const guardianData = await listGuardians();
 
         if (!isMounted) {
           return;
         }
 
-        setPupils(pupilData.map(normalizePupilRecord));
+        setGuardians(guardianData.map(normalizeGuardianRecord));
       } catch (error) {
         if (!isMounted) {
           return;
@@ -297,7 +250,7 @@ export default function PupilsInformationPage() {
 
         showToast({
           tone: "error",
-          title: "Unable to load pupils.",
+          title: "Unable to load guardians.",
           description: error instanceof Error ? error.message : "Please try again in a moment.",
         });
       } finally {
@@ -307,7 +260,7 @@ export default function PupilsInformationPage() {
       }
     }
 
-    void loadPupils();
+    void loadGuardians();
 
     return () => {
       isMounted = false;
@@ -355,10 +308,10 @@ export default function PupilsInformationPage() {
     () =>
       citiesMunicipalities.find(
         (cityMunicipality) =>
-          cityMunicipality.name === formValues.city_municipality &&
+          cityMunicipality.name === formValues.municipality_city &&
           (!selectedProvince || cityMunicipality.provinceCode === selectedProvince.code),
       ) ?? null,
-    [formValues.city_municipality, selectedProvince],
+    [formValues.municipality_city, selectedProvince],
   );
 
   const barangayOptions = useMemo(
@@ -381,19 +334,19 @@ export default function PupilsInformationPage() {
     [selectedCityMunicipality],
   );
 
-  const pupilFields = useMemo(
-    () => buildPupilFields(provinceOptions, cityMunicipalityOptions, barangayOptions),
+  const guardianFields = useMemo(
+    () => buildGuardianFields(provinceOptions, cityMunicipalityOptions, barangayOptions),
     [barangayOptions, cityMunicipalityOptions, provinceOptions],
   );
 
-  const deleteTargetPupil = useMemo(
-    () => pupils.find((pupil) => pupil.id === deleteState?.pupilId) ?? null,
-    [deleteState?.pupilId, pupils],
+  const deleteTargetGuardian = useMemo(
+    () => guardians.find((guardian) => guardian.id === deleteState?.guardianId) ?? null,
+    [deleteState?.guardianId, guardians],
   );
 
-  const tablePupils: PupilTableRow[] = useMemo(
-    () => pupilsResponse.data.map(toPupilTableRow),
-    [pupilsResponse.data],
+  const tableGuardians: GuardianTableRow[] = useMemo(
+    () => guardiansResponse.data.map(toGuardianTableRow),
+    [guardiansResponse.data],
   );
 
   function showToast({
@@ -415,34 +368,37 @@ export default function PupilsInformationPage() {
   }
 
   function dismissToast(toastId: string) {
-    setToasts((currentValue) =>
-      currentValue.filter((toast) => toast.id !== toastId),
-    );
+    setToasts((currentValue) => currentValue.filter((toast) => toast.id !== toastId));
   }
 
   function openAddModal() {
     setFormValues(emptyFormValues);
     setDialogState({
       mode: "add",
-      pupilId: null,
+      guardianId: null,
     });
   }
 
-  function openViewPage(pupilId: number) {
-    router.push(`/pupils/information/${pupilId}`);
+  function openViewModal(guardianId: number) {
+    const guardian = guardians.find((item) => item.id === guardianId) ?? null;
+    setFormValues(normalizeFormValues(guardian));
+    setDialogState({
+      mode: "view",
+      guardianId,
+    });
   }
 
-  function openEditModal(pupilId: number) {
-    const pupil = pupils.find((item) => item.id === pupilId) ?? null;
-    setFormValues(normalizeFormValues(pupil));
+  function openEditModal(guardianId: number) {
+    const guardian = guardians.find((item) => item.id === guardianId) ?? null;
+    setFormValues(normalizeFormValues(guardian));
     setDialogState({
       mode: "edit",
-      pupilId,
+      guardianId,
     });
   }
 
-  function openDeleteModal(pupilId: number) {
-    setDeleteState({ pupilId });
+  function openDeleteModal(guardianId: number) {
+    setDeleteState({ guardianId });
   }
 
   function closeDialog() {
@@ -455,10 +411,10 @@ export default function PupilsInformationPage() {
   }
 
   function handleFieldChange(name: string, value: string) {
-    if (name === "lrn") {
+    if (name === "contact_number") {
       setFormValues((currentValue) => ({
         ...currentValue,
-        lrn: normalizeLrnInput(value),
+        contact_number: normalizeContactNumberInput(value),
       }));
       return;
     }
@@ -468,7 +424,7 @@ export default function PupilsInformationPage() {
         ...currentValue,
         region: value,
         province: value === "Region VII" ? "Bohol" : "",
-        city_municipality: "",
+        municipality_city: "",
         barangay: "",
       }));
       return;
@@ -478,16 +434,16 @@ export default function PupilsInformationPage() {
       setFormValues((currentValue) => ({
         ...currentValue,
         province: value,
-        city_municipality: "",
+        municipality_city: "",
         barangay: "",
       }));
       return;
     }
 
-    if (name === "city_municipality") {
+    if (name === "municipality_city") {
       setFormValues((currentValue) => ({
         ...currentValue,
-        city_municipality: value,
+        municipality_city: value,
         barangay: "",
       }));
       return;
@@ -499,28 +455,36 @@ export default function PupilsInformationPage() {
     }));
   }
 
-  function buildPupilPayload() {
+  function buildGuardianPayload() {
     return {
+      avatar: formValues.profile_picture.trim(),
       profile_picture: formValues.profile_picture.trim(),
-      lrn: formValues.lrn.trim(),
       first_name: formValues.first_name.trim(),
       middle_name: formValues.middle_name.trim(),
       last_name: formValues.last_name.trim(),
       suffix: formValues.suffix.trim(),
-      sex: formValues.sex,
-      birthdate: formValues.birthdate,
-      birthplace: formValues.birthplace.trim(),
-      street_address: formValues.street_address.trim(),
+      contact_number: formValues.contact_number.trim(),
+      address: formValues.address.trim(),
       barangay: formValues.barangay.trim(),
-      city_municipality: formValues.city_municipality.trim(),
+      municipality_city: formValues.municipality_city.trim(),
       province: formValues.province.trim(),
       region: formValues.region.trim(),
-      status: formValues.status as PupilStatus,
     };
   }
 
-  async function handleSavePupil() {
+  async function handleSaveGuardian() {
     if (!dialogState) {
+      return;
+    }
+
+    const normalizedContactNumber = normalizeContactNumberInput(formValues.contact_number);
+
+    if (!/^\d{7,20}$/.test(normalizedContactNumber)) {
+      showToast({
+        tone: "error",
+        title: "Invalid contact number.",
+        description: "Contact number must contain 7 to 20 digits only.",
+      });
       return;
     }
 
@@ -528,38 +492,38 @@ export default function PupilsInformationPage() {
       setIsSubmitting(true);
 
       if (dialogState.mode === "add") {
-        const createdPupil = await createPupil(buildPupilPayload());
+        const createdGuardian = await createGuardian(buildGuardianPayload());
 
-        setPupils((currentPupils) => [normalizePupilRecord(createdPupil), ...currentPupils]);
+        setGuardians((currentGuardians) => [normalizeGuardianRecord(createdGuardian), ...currentGuardians]);
         setCurrentPage(1);
         closeDialog();
         showToast({
           tone: "success",
-          title: "Pupil created successfully.",
+          title: "Guardian created successfully.",
         });
         return;
       }
 
-      if (dialogState.mode === "edit" && dialogState.pupilId !== null) {
-        const updatedPupil = await updatePupil(dialogState.pupilId, buildPupilPayload());
+      if (dialogState.mode === "edit" && dialogState.guardianId !== null) {
+        const updatedGuardian = await updateGuardian(dialogState.guardianId, buildGuardianPayload());
 
-        setPupils((currentPupils) =>
-          currentPupils.map((currentPupil) =>
-            currentPupil.id === dialogState.pupilId
-              ? normalizePupilRecord(updatedPupil)
-              : currentPupil,
+        setGuardians((currentGuardians) =>
+          currentGuardians.map((currentGuardian) =>
+            currentGuardian.id === dialogState.guardianId
+              ? normalizeGuardianRecord(updatedGuardian)
+              : currentGuardian,
           ),
         );
         closeDialog();
         showToast({
           tone: "success",
-          title: "Pupil updated successfully.",
+          title: "Guardian updated successfully.",
         });
       }
     } catch (error) {
       showToast({
         tone: "error",
-        title: "Unable to save the pupil.",
+        title: "Unable to save the guardian.",
         description: error instanceof Error ? error.message : "Please try again in a moment.",
       });
     } finally {
@@ -567,27 +531,29 @@ export default function PupilsInformationPage() {
     }
   }
 
-  async function handleDeletePupil() {
-    if (!deleteState?.pupilId) {
+  async function handleDeleteGuardian() {
+    if (!deleteState?.guardianId) {
       return;
     }
 
     try {
       setIsSubmitting(true);
-      await deletePupil(deleteState.pupilId);
-      setPupils((currentPupils) => currentPupils.filter((pupil) => pupil.id !== deleteState.pupilId));
+      await deleteGuardian(deleteState.guardianId);
+      setGuardians((currentGuardians) =>
+        currentGuardians.filter((guardian) => guardian.id !== deleteState.guardianId),
+      );
       closeDeleteDialog();
       showToast({
         tone: "success",
-        title: "Pupil deleted successfully.",
-        description: deleteTargetPupil?.full_name
-          ? `${deleteTargetPupil.full_name} was removed from the list.`
+        title: "Guardian deleted successfully.",
+        description: deleteTargetGuardian?.full_name
+          ? `${deleteTargetGuardian.full_name} was removed from the list.`
           : undefined,
       });
     } catch (error) {
       showToast({
         tone: "error",
-        title: "Unable to delete the pupil.",
+        title: "Unable to delete the guardian.",
         description: error instanceof Error ? error.message : "Please try again in a moment.",
       });
     } finally {
@@ -595,48 +561,36 @@ export default function PupilsInformationPage() {
     }
   }
 
-  const columns: TableColumn<PupilTableRow>[] = [
+  const columns: TableColumn<GuardianTableRow>[] = [
     {
-      key: "full_name",
-      header: "Pupil",
+      key: "name",
+      header: "Name",
       type: "stacked",
       showAvatar: true,
       avatarImageKey: "avatar",
-      avatarFallbackKey: "full_name",
-      secondaryKey: "lrn",
+      avatarFallbackKey: "name",
+      secondaryKey: "contact_number",
       valueClassName: "font-semibold text-slate-950",
       secondaryValueClassName: "text-xs text-muted",
     },
     {
-      key: "sex",
-      header: "Sex",
-      valueClassName: "text-sm capitalize text-slate-700",
-    },
-    {
-      key: "birthdate",
-      header: "Birthdate",
+      key: "contact_number",
+      header: "Contact Number",
       valueClassName: "text-sm text-slate-700",
     },
     {
       key: "location",
+      header: "Location",
+      valueClassName: "text-sm text-slate-700",
+    },
+    {
+      key: "address",
       header: "Address",
       valueClassName: "text-sm text-slate-700",
     },
     {
-      key: "status",
-      header: "Status",
-      type: "badge",
-      badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold ring-1 ring-inset capitalize",
-      toneMap: statusToneMap,
-    },
-    {
       key: "created_at",
       header: "Created",
-      valueClassName: "text-sm text-slate-600",
-    },
-    {
-      key: "updated_at",
-      header: "Updated",
       valueClassName: "text-sm text-slate-600",
     },
     {
@@ -649,7 +603,7 @@ export default function PupilsInformationPage() {
         {
           label: "View",
           icon: <ViewIcon />,
-          onClick: (row) => openViewPage(Number(row.id)),
+          onClick: (row) => openViewModal(Number(row.id)),
           tone: "primary",
         },
         {
@@ -668,29 +622,25 @@ export default function PupilsInformationPage() {
   ];
 
   return (
-    <PagePlaceholder
-      breadcrumb="Home > Pupils > Information"
-      sectionLabel="Pupils panel"
-      title="Information"
-    >
+    <PagePlaceholder breadcrumb="Home > Guardians" title="Guardians">
       <ToastViewport onDismiss={dismissToast} toasts={toasts} />
 
       <div className="space-y-3">
         <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
           <Button disabled={isSubmitting} onClick={openAddModal} size="sm">
-            Add Pupil
+            Add Guardian
           </Button>
         </div>
 
         <Table
           columns={columns}
-          data={tablePupils}
-          emptyMessage={isLoading ? "Loading pupils..." : "No pupils found."}
+          data={tableGuardians}
+          emptyMessage={isLoading ? "Loading guardians..." : "No guardians found."}
           pagination={{
-            page: pupilsResponse.meta.page,
-            perPage: pupilsResponse.meta.per_page,
-            total: pupilsResponse.meta.total,
-            totalPages: pupilsResponse.meta.total_pages,
+            page: guardiansResponse.meta.page,
+            perPage: guardiansResponse.meta.per_page,
+            total: guardiansResponse.meta.total,
+            totalPages: guardiansResponse.meta.total_pages,
             onPageChange: setCurrentPage,
             onPageSizeChange: (value) => {
               setPageSize(value);
@@ -704,14 +654,16 @@ export default function PupilsInformationPage() {
               setCurrentPage(1);
             },
           }}
-          searchPlaceholder="Search name, LRN, sex, status, or address"
+          searchPlaceholder="Search name, contact number, or address"
         />
       </div>
 
       <FormModal
+        showBodyDivider={true}
+        dividerAfterIndex={0}
         bodyClassName="px-5 py-5 sm:px-5 sm:py-5"
         columns={3}
-        fields={pupilFields}
+        fields={guardianFields}
         fieldClassName="space-y-1"
         footerClassName="border-t border-border bg-card px-5 py-4 sm:px-5"
         gridClassName="grid-cols-1 md:grid-cols-6 xl:grid-cols-12 xl:auto-rows-min"
@@ -721,7 +673,7 @@ export default function PupilsInformationPage() {
         mode={dialogState?.mode ?? "view"}
         onChange={handleFieldChange}
         onClose={closeDialog}
-        onSubmit={dialogState?.mode === "view" ? undefined : handleSavePupil}
+        onSubmit={dialogState?.mode === "view" ? undefined : handleSaveGuardian}
         panelClassName="rounded-[6px] border border-border bg-card shadow-[0_14px_38px_rgba(15,23,42,0.14)]"
         size="modal-large"
         submitLabel={
@@ -731,14 +683,14 @@ export default function PupilsInformationPage() {
               : "Creating..."
             : dialogState?.mode === "edit"
               ? "Save Changes"
-              : "Create Pupil"
+              : "Create Guardian"
         }
         title={
           dialogState?.mode === "view"
-            ? "View Pupil"
+            ? "View Guardian"
             : dialogState?.mode === "edit"
-              ? "Edit Pupil"
-              : "Add Pupil"
+              ? "Edit Guardian"
+              : "Add Guardian"
         }
         titleClassName="text-[17px] font-semibold text-slate-950 sm:text-[18px]"
         values={formValues}
@@ -751,10 +703,10 @@ export default function PupilsInformationPage() {
         emphasisMessage="This action cannot be undone."
         emphasisTone="danger"
         isOpen={Boolean(deleteState)}
-        itemLabel={deleteTargetPupil?.full_name ?? "this pupil"}
+        itemLabel={deleteTargetGuardian?.full_name ?? "this guardian"}
         onClose={closeDeleteDialog}
-        onConfirm={handleDeletePupil}
-        title="Delete Pupil"
+        onConfirm={handleDeleteGuardian}
+        title="Delete Guardian"
       />
     </PagePlaceholder>
   );
