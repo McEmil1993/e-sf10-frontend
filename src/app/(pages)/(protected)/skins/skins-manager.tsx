@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { resetThemeSettingsAction, saveThemeSettingsAction } from "@/app/actions/theme";
 import Button from "@/app/components/Button/Button";
+import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
 import type { SkinsManagerProps } from "@/app/types/components/skinsManagerTypes";
 import type { AdminThemeSettings, ThemePresetName } from "@/app/types/themeTypes";
 
@@ -85,15 +86,11 @@ export default function SkinsManager({
   }
 
   return (
-    <div className="space-y-4">
-      <section className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-[32px] font-light text-slate-900">Skins</h1>
-          <p className="text-sm text-muted">Skin and layout options</p>
-        </div>
-        <div className="text-sm text-muted">Home &gt; Skins</div>
-      </section>
-
+    <PagePlaceholder
+      breadcrumb="Home > Skins"
+      sectionLabel="Skin and layout options"
+      title="Skins"
+    >
       <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
         <section className="space-y-4 rounded-[5px] border border-border bg-card p-4 shadow-sm">
           <div className="space-y-1">
@@ -323,6 +320,6 @@ export default function SkinsManager({
           </section>
         </div>
       </div>
-    </div>
+    </PagePlaceholder>
   );
 }

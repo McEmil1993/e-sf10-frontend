@@ -8,6 +8,48 @@ export const mainNavItems: NavItem[] = [
     description: "Overview and summary",
   },
   {
+    label: "Pupil Information",
+    href: "/pupils/information",
+    icon: "users",
+    description: "View pupil information",
+  },
+  {
+    label: "Pupil Grades",
+    href: "/pupils/grades",
+    icon: "chart",
+    description: "View pupil grades",
+  },
+  {
+    label: "Pupil SF10 Records",
+    href: "/pupils/sf10-records",
+    icon: "document",
+    description: "View SF10 records",
+  },
+  {
+    label: "Records Search",
+    href: "/records/search",
+    icon: "document",
+    description: "Search records",
+  },
+  {
+    label: "Records Verification",
+    href: "/records/verification",
+    icon: "shield",
+    description: "Verify records",
+  },
+  {
+    label: "Records Archive",
+    href: "/records/archive",
+    icon: "document",
+    description: "Archived records",
+  },
+  {
+    label: "Reports Export / Print",
+    href: "/reports/export-print",
+    icon: "reports",
+    description: "Export or print reports",
+  },
+  {
     label: "Settings",
     icon: "settings",
     description: "System settings",

@@ -4,12 +4,17 @@ import { useEffect, useState } from "react";
 import type { ModalProps } from "@/app/types/components/modalTypes";
 
 export default function Modal({
+  bodyClassName,
   children,
   description,
   footer,
+  footerClassName,
+  headerClassName,
   isOpen,
+  panelClassName,
   size = "md",
   title,
+  titleClassName,
 }: ModalProps) {
   const [isMounted, setIsMounted] = useState(isOpen);
   const [isVisible, setIsVisible] = useState(false);
@@ -52,17 +57,28 @@ export default function Modal({
     >
       <div
         className={[
-          "flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden rounded-[5px] border border-white/60 bg-card shadow-[0_24px_60px_rgba(15,23,42,0.2)] transition-all duration-300 ease-out sm:max-h-[calc(100vh-4rem)] lg:max-h-[calc(100vh-5rem)]",
+          "flex max-h-[calc(100vh-3rem)] w-full flex-col overflow-hidden rounded-[8px] border border-border/80 bg-card shadow-[0_24px_60px_rgba(15,23,42,0.16)] transition-all duration-300 ease-out sm:max-h-[calc(100vh-4rem)] lg:max-h-[calc(100vh-5rem)]",
           sizeClassName,
+          panelClassName ?? "",
           isVisible ? "translate-y-0 scale-100 opacity-100" : "translate-y-3 scale-95 opacity-0",
         ].join(" ")}
       >
-        <div className="shrink-0 space-y-2 border-b border-border px-6 py-5">
-          <h2 className="text-2xl font-semibold text-slate-950">{title}</h2>
+        <div className={["shrink-0 space-y-1.5 border-b border-border px-5 py-4 sm:px-6", headerClassName ?? ""].join(" ")}>
+          <h2 className={["text-[18px] font-semibold leading-none text-slate-950 sm:text-[20px]", titleClassName ?? ""].join(" ")}>
+            {title}
+          </h2>
           {description ? <p className="text-sm text-muted">{description}</p> : null}
         </div>
-        {children ? <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div> : null}
-        {footer ? <div className="shrink-0 border-t border-border px-6 py-4">{footer}</div> : null}
+        {children ? (
+          <div className={["min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5", bodyClassName ?? ""].join(" ")}>
+            {children}
+          </div>
+        ) : null}
+        {footer ? (
+          <div className={["shrink-0 border-t border-border bg-background/35 px-5 py-4 sm:px-6", footerClassName ?? ""].join(" ")}>
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );

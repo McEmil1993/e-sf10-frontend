@@ -1,17 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useFormStatus } from "react-dom";
-import { loginAction } from "@/app/actions/auth";
+import { useState, type FormEvent } from "react";
 import Button from "@/app/components/Button/Button";
-import type { LoginState } from "@/app/types/authTypes";
 import type { LoginFormProps } from "@/app/types/components/loginTypes";
-
-const initialState: LoginState = {
-  error: null,
-  email: "",
-  password: "",
-};
+import { ApiError, login } from "@/app/utils/api";
 
 function MailIcon() {
   return (
@@ -45,40 +37,66 @@ function EyeSlashIcon() {
   );
 }
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button disabled={pending} fullWidth size="lg" type="submit">
-      {pending ? "Signing in..." : "Sign In"}
-    </Button>
-  );
-}
-
 export default function LoginForm({
   description = "Sign in to start your session",
   sampleEmails = [],
   title = "E-SF10 Login",
 }: LoginFormProps) {
-  const [state, formAction] = useActionState(loginAction, initialState);
-  const [emailValue, setEmailValue] = useState(state.email);
-  const [passwordValue, setPasswordValue] = useState(state.password);
+  const [emailValue, setEmailValue] = useState("");
+  const [passwordValue, setPasswordValue] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    setEmailValue(state.email);
-    setPasswordValue(state.password);
-  }, [state.email, state.password]);
-
-  const hasEmailError =
-    (state.error === "Email is required." || state.error === "No account found for that email.") &&
-    emailValue === state.email;
+  const hasEmailError = errorMessage === "Email is required.";
   const hasPasswordError =
-    (state.error === "Password is required." || state.error === "Incorrect password.") &&
-    passwordValue === state.password;
+    errorMessage === "Password is required." ||
+    errorMessage === "Invalid email or password.";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const email = emailValue.trim().toLowerCase();
+    const password = passwordValue.trim();
+
+    if (!email) {
+      setErrorMessage("Email is required.");
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage("Password is required.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrorMessage(null);
+      const result = await login(email, password);
+
+      if (result.user.status !== "active") {
+        setErrorMessage("Only active users can sign in.");
+        return;
+      }
+
+      window.location.assign("/dashboard");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrorMessage(
+          error.status === 401
+            ? "Invalid email or password."
+            : error.message || "Unable to sign in right now.",
+        );
+      } else {
+        setErrorMessage("Unable to sign in right now.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form className="space-y-4" onSubmit={handleSubmit}>
       <div className="space-y-1 text-center">
         <h1 className="text-3xl font-semibold text-slate-900">{title}</h1>
         <p className="text-sm text-muted">{description}</p>
@@ -142,15 +160,17 @@ export default function LoginForm({
           </button>
         </div>
       </div>
-      {state.error ? (
+      {errorMessage ? (
         <p
           className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700"
           role="alert"
         >
-          {state.error}
+          {errorMessage}
         </p>
       ) : null}
-      <SubmitButton />
+      <Button disabled={isSubmitting} fullWidth size="lg" type="submit">
+        {isSubmitting ? "Signing in..." : "Sign In"}
+      </Button>
       {sampleEmails.length > 0 ? (
         <div className="space-y-3 rounded-md border border-border bg-slate-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">

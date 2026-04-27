@@ -1,16 +1,19 @@
+import { redirect } from "next/navigation";
 import Chart from "@/app/components/Chart/Chart";
+import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
 import Table from "@/app/components/Table/Table";
 import type { TableColumn } from "@/app/types/tableTypes";
 import Widget from "@/app/components/Widget/Widget";
 import type { UserTableRow } from "@/app/types/userTypes";
 import {
+  buildRoleToneMap,
   formatDate,
   getDashboardStats,
   getPrimaryUserRole,
-  getRoleTone,
   getStatusTone,
-  getUsers,
-} from "@/app/utils/mockData";
+} from "@/app/lib/display";
+import { listUsers } from "@/app/utils/api";
+import { getSessionData } from "@/app/utils/auth";
 
 function BagIcon() {
   return (
@@ -36,56 +39,54 @@ function UserPlusIcon() {
   );
 }
 
-const roleToneMap = {
-  admin: getRoleTone("admin"),
-  developer: getRoleTone("developer"),
-  editor: getRoleTone("editor"),
-  staff: getRoleTone("staff"),
-  user: getRoleTone("user"),
-};
-
 const statusToneMap = {
   active: getStatusTone("active"),
   inactive: getStatusTone("inactive"),
-  banned: getStatusTone("banned"),
+
 };
 
-const userColumns: TableColumn<UserTableRow>[] = [
-  {
-    key: "name",
-    header: "Name",
-    type: "stacked",
-    showAvatar: true,
-    avatarImageKey: "avatar",
-    avatarFallbackKey: "name",
-    secondaryKey: "email",
-    valueClassName: "font-semibold text-slate-950",
-    secondaryValueClassName: "text-xs text-muted",
-  },
-  {
-    key: "role",
-    header: "Role",
-    type: "badge",
-    badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold",
-    toneMap: roleToneMap,
-  },
-  {
-    key: "status",
-    header: "Status",
-    type: "badge",
-    badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold ring-1 ring-inset",
-    toneMap: statusToneMap,
-  },
-  {
-    key: "created_at",
-    header: "Created",
-    valueClassName: "text-sm text-slate-600",
-  },
-];
-
 export default async function DashboardPage() {
-  const users = await getUsers();
+  const session = await getSessionData();
+
+  if (!session?.token) {
+    redirect("/login");
+  }
+
+  const users = await listUsers(session.token);
   const stats = getDashboardStats(users);
+  const roleToneMap = buildRoleToneMap(users.flatMap((user) => user.roles));
+  const userColumns: TableColumn<UserTableRow>[] = [
+    {
+      key: "name",
+      header: "Name",
+      type: "stacked",
+      showAvatar: true,
+      avatarImageKey: "avatar",
+      avatarFallbackKey: "name",
+      secondaryKey: "email",
+      valueClassName: "font-semibold text-slate-950",
+      secondaryValueClassName: "text-xs text-muted",
+    },
+    {
+      key: "role",
+      header: "Role",
+      type: "badge",
+      badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold",
+      toneMap: roleToneMap,
+    },
+    {
+      key: "status",
+      header: "Status",
+      type: "badge",
+      badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold ring-1 ring-inset",
+      toneMap: statusToneMap,
+    },
+    {
+      key: "created_at",
+      header: "Created",
+      valueClassName: "text-sm text-slate-600",
+    },
+  ];
   const tableUsers: UserTableRow[] = users.map((user) => ({
     id: user.id,
     name: user.name,
@@ -97,14 +98,7 @@ export default async function DashboardPage() {
   }));
 
   return (
-    <div className="space-y-4">
-      <section className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-[32px] font-light text-slate-900">Dashboard</h1>
-        </div>
-        <div className="text-sm text-muted">Home &gt; Dashboard</div>
-      </section>
-
+    <PagePlaceholder breadcrumb="Home > Dashboard" title="Dashboard">
       <section className="rounded-sm bg-amber-500 px-4 py-3 text-white shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-base font-semibold">
@@ -163,16 +157,11 @@ export default async function DashboardPage() {
               label: "Inactive users",
               tone: "amber",
               value: stats.inactiveUsers,
-            },
-            {
-              label: "Banned users",
-              tone: "rose",
-              value: stats.bannedUsers,
-            },
+            }
           ]}
           title="Visitors"
         />
       </section>
-    </div>
+    </PagePlaceholder>
   );
 }

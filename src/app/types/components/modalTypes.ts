@@ -5,9 +5,21 @@ export type ModalSize = "sm" | "md" | "lg" | "xl" | "modal-large";
 
 export type ModalMode = "view" | "add" | "edit";
 
-export type ModalFieldType = "text" | "email" | "password" | "select" | "textarea" | "icon-lookup" | "checkbox-group" | "lookup";
+export type ModalFieldType =
+  | "text"
+  | "email"
+  | "password"
+  | "date"
+  | "select"
+  | "textarea"
+  | "icon-lookup"
+  | "checkbox-group"
+  | "lookup"
+  | "file";
 
 export type ModalInputSize = "sm" | "md" | "lg";
+export type ModalImageCropShape = "circle" | "square";
+export type ModalCheckboxStyle = "default" | "pill";
 
 export type ModalFieldOption = {
   label: string;
@@ -20,6 +32,8 @@ export type ModalField = {
   label: string;
   type?: ModalFieldType;
   placeholder?: string;
+  accept?: string;
+  helperText?: string;
   options?: ModalFieldOption[];
   maxSelections?: number;
   required?: boolean;
@@ -28,6 +42,11 @@ export type ModalField = {
   rows?: number;
   colSpan?: 1 | 2;
   inputSize?: ModalInputSize;
+  checkboxStyle?: ModalCheckboxStyle;
+  layoutClassName?: string;
+  enableImageCrop?: boolean;
+  cropShape?: ModalImageCropShape;
+  cropAspect?: number;
 };
 
 export type ModalProps = {
@@ -35,6 +54,11 @@ export type ModalProps = {
   title: string;
   description?: string;
   size?: ModalSize;
+  titleClassName?: string;
+  panelClassName?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
   footer?: ReactNode;
   children?: ReactNode;
   onClose: () => void;
@@ -50,6 +74,14 @@ export type FormModalProps = {
   submitLabel?: string;
   size?: ModalSize;
   columns?: 1 | 2 | 3;
+  gridClassName?: string;
+  fieldClassName?: string;
+  labelClassName?: string;
+  panelClassName?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
+  titleClassName?: string;
   onChange: (name: string, value: string) => void;
   onClose: () => void;
   onSubmit?: () => void;

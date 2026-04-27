@@ -2,11 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { logoutAction } from "@/app/actions/auth";
+import { useEffect, useRef, useState } from "react";
+import logoWhite from "@/app/logo-white.png";
 import type {
   NavUtilityIconProps,
   TopNavProps,
 } from "@/app/types/components/topNavTypes";
+import { logout } from "@/app/utils/api";
 
 function getInitials(name: string) {
   return name
@@ -45,6 +47,46 @@ function NavUtilityIcon({ type }: NavUtilityIconProps) {
 }
 
 export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNavProps) {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!profileMenuRef.current?.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isProfileMenuOpen]);
+
+  async function handleLogout() {
+    try {
+      setIsLoggingOut(true);
+      setIsProfileMenuOpen(false);
+      await logout();
+    } finally {
+      window.location.assign("/login");
+    }
+  }
+
   return (
     <header
       className="z-30 flex h-12 items-center bg-primary shadow-sm"
@@ -57,15 +99,24 @@ export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNa
         ].join(" ")}
       >
         <div className={["flex items-center", isSidebarCollapsed ? "justify-center" : "gap-2.5"].join(" ")}>
-          <Image
-            alt="E-SF10"
-            className="h-7 w-7 rounded-sm object-cover"
-            height={28}
-            priority
-            src="/icon.png"
-            width={28}
-          />
-          {!isSidebarCollapsed ? <span className="text-xl font-semibold">E-SF10</span> : null}
+          {isSidebarCollapsed ? (
+            <Image
+              alt="E-SF10"
+              className="rounded-sm object-cover"
+              height={24}
+              priority
+              src="/icon.png"
+              width={24}
+            />
+          ) : (
+            <Image
+              alt="E-SF10"
+              className="object-contain"
+              priority
+              src={logoWhite}
+              style={{ width: "auto", height: "28px" }}
+            />
+          )}
         </div>
       </div>
       <div className="flex min-w-0 flex-1 items-center justify-between px-4 sm:px-6 lg:px-8" style={{ paddingLeft: '7px' }}>
@@ -91,45 +142,55 @@ export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNa
               10
             </span>
           </button>
-          <details className="relative">
-            <summary
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              aria-expanded={isProfileMenuOpen}
+              aria-haspopup="menu"
               className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-black/10 text-xs font-semibold transition hover:bg-black/15"
+              onClick={() => {
+                setIsProfileMenuOpen((currentValue) => !currentValue);
+              }}
               style={{ color: "var(--topbar-foreground)" }}
+              type="button"
             >
               {getInitials(user.name)}
-            </summary>
-            <div className="absolute right-0 top-11 w-64 overflow-hidden rounded-md border border-border bg-card text-slate-900 shadow-lg">
+            </button>
+            {isProfileMenuOpen ? (
+              <div
+                className="absolute right-0 top-11 w-64 overflow-hidden rounded-md border border-border bg-card text-slate-900 shadow-lg"
+                onClick={() => {
+                  setIsProfileMenuOpen(false);
+                }}
+              >
               <div className="border-b border-border px-4 py-3">
                 <p className="truncate text-sm font-semibold text-slate-950">{user.name}</p>
                 <p className="truncate text-xs text-muted">{user.email}</p>
               </div>
               <ul className="py-1 text-sm text-slate-700">
                 <li>
-                  <span className="flex w-full items-center px-4 py-2.5 text-slate-400">
-                    Profile
-                  </span>
-                </li>
-                <li>
                   <Link
                     className="flex items-center px-4 py-2.5 transition hover:bg-slate-50"
-                    href="/settings"
+                    href="/profile"
                   >
-                    Settings
+                    Profile
                   </Link>
                 </li>
                 <li className="border-t border-border">
-                  <form action={logoutAction}>
-                    <button
-                      className="flex w-full items-center px-4 py-2.5 text-left text-rose-600 transition hover:bg-rose-50"
-                      type="submit"
-                    >
-                      Logout
-                    </button>
-                  </form>
+                  <button
+                    className="flex w-full items-center px-4 py-2.5 text-left text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isLoggingOut}
+                    onClick={() => {
+                      void handleLogout();
+                    }}
+                    type="button"
+                  >
+                    {isLoggingOut ? "Logging out..." : "Logout"}
+                  </button>
                 </li>
               </ul>
-            </div>
-          </details>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </header>
