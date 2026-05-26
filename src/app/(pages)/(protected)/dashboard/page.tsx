@@ -95,7 +95,7 @@ export default async function DashboardPage() {
     role: getPrimaryUserRole(user),
     status: user.status,
     created_at: formatDate(user.created_at),
-  }));
+      }));
 
   return (
     <PagePlaceholder breadcrumb="Home > Dashboard" title="Dashboard">
