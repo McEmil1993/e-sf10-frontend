@@ -428,8 +428,24 @@ export default function PupilsInformationPage() {
     });
   }
 
-  function openViewPage(pupilId: number) {
-    router.push(`/pupils/information/${pupilId}`);
+  async function openViewPage(pupilId: number) {
+    try {
+      const response = await fetch(`/api/pupils/route-token?id=${pupilId}`);
+      const payload = (await response.json()) as { message?: string; token?: string };
+
+      if (!response.ok || !payload.token) {
+        throw new Error(payload.message || "Unable to generate the pupil detail URL.");
+      }
+
+      router.push(`/pupils/information/${payload.token}`);
+    } catch (error) {
+      showToast({
+        tone: "error",
+        title: "Unable to open pupil details.",
+        description:
+          error instanceof Error ? error.message : "Please try again in a moment.",
+      });
+    }
   }
 
   function openEditModal(pupilId: number) {
