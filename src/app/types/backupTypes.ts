@@ -9,7 +9,7 @@ export type BackupTableCounts = {
   users: number;
   user_roles: number;
   user_permissions: number;
-  pupils: number;
+  students: number;
 };
 
 export type BackupFileItem = {

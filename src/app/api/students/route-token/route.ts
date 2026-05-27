@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
-import { encodePupilRouteId } from "@/app/utils/pupilRouteToken";
+import { encodeStudentRouteId } from "@/app/utils/studentRouteToken";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const pupilId = Number(searchParams.get("id"));
+  const studentId = Number(searchParams.get("id"));
 
-  if (!Number.isInteger(pupilId) || pupilId <= 0) {
+  if (!Number.isInteger(studentId) || studentId <= 0) {
     return NextResponse.json(
-      { message: "A valid pupil ID is required." },
+      { message: "A valid student ID is required." },
       { status: 400 },
     );
   }
 
   try {
     return NextResponse.json({
-      token: encodePupilRouteId(pupilId),
+      token: encodeStudentRouteId(studentId),
     });
   } catch (error) {
     return NextResponse.json(
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         message:
           error instanceof Error
             ? error.message
-            : "Unable to generate the pupil route token.",
+            : "Unable to generate the student route token.",
       },
       { status: 500 },
     );

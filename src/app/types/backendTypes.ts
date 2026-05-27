@@ -37,7 +37,7 @@ export type BackendUserResponseDto = {
   deletedAt: string | null;
 };
 
-export type BackendPupilResponseDto = {
+export type BackendStudentResponseDto = {
   id: number;
   lrn: string;
   firstName: string;
@@ -77,9 +77,9 @@ export type BackendGuardianResponseDto = {
   deletedAt: string | null;
 };
 
-export type BackendPupilGuardianResponseDto = {
+export type BackendStudentGuardianResponseDto = {
   id: number;
-  pupilId: number;
+  studentId: number;
   guardianId: number;
   relationship: string;
   isPrimary: boolean;
@@ -87,6 +87,26 @@ export type BackendPupilGuardianResponseDto = {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+};
+
+export type BackendStudentInformationLookupDto = {
+  id: number;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+export type BackendStudentInformationLookupsResponseDto = {
+  motherTongues: BackendStudentInformationLookupDto[];
+  indigenousGroups: BackendStudentInformationLookupDto[];
+  religions: BackendStudentInformationLookupDto[];
+};
+
+export type BackendStudentInformationResponseDto = {
+  studentId: number;
+  motherTongue: BackendStudentInformationLookupDto | null;
+  indigenousGroup: BackendStudentInformationLookupDto | null;
+  religion: BackendStudentInformationLookupDto | null;
 };
 
 export type BackendAuthResponseDto = {
@@ -131,6 +151,22 @@ export type BackendPositionResponseDto = {
   acronym: string;
   fullPosition: string;
   category: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type BackendSchoolSettingsResponseDto = {
+  schoolId: number;
+  depedSchoolId: string;
+  schoolName: string;
+  district: string;
+  division: string;
+  region: string;
+  address: string;
+  schoolLogo: string | null;
+  depedLogo: string | null;
+  otherLogo: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

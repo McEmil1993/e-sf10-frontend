@@ -5,7 +5,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 const TOKEN_PREFIX = "p1_";
 const IV_LENGTH = 12;
 const AUTH_TAG_LENGTH = 16;
-const DEVELOPMENT_FALLBACK_SECRET = "local-dev-pupil-route-secret";
+const DEVELOPMENT_FALLBACK_SECRET = "local-dev-student-route-secret";
 
 function toBase64Url(buffer: Buffer) {
   return buffer
@@ -22,8 +22,8 @@ function fromBase64Url(value: string) {
   return Buffer.from(normalizedValue + "=".repeat(paddingLength), "base64");
 }
 
-function getPupilRouteSecret() {
-  const configuredSecret = process.env.PUPIL_ROUTE_SECRET?.trim();
+function getStudentRouteSecret() {
+  const configuredSecret = process.env.STUDENT_ROUTE_SECRET?.trim();
 
   if (configuredSecret) {
     return configuredSecret;
@@ -33,22 +33,22 @@ function getPupilRouteSecret() {
     return DEVELOPMENT_FALLBACK_SECRET;
   }
 
-  throw new Error("PUPIL_ROUTE_SECRET is not set.");
+  throw new Error("STUDENT_ROUTE_SECRET is not set.");
 }
 
 function getEncryptionKey() {
-  return createHash("sha256").update(getPupilRouteSecret()).digest();
+  return createHash("sha256").update(getStudentRouteSecret()).digest();
 }
 
-export function encodePupilRouteId(pupilId: number) {
-  if (!Number.isInteger(pupilId) || pupilId <= 0) {
-    throw new Error("Pupil ID must be a positive integer.");
+export function encodeStudentRouteId(studentId: number) {
+  if (!Number.isInteger(studentId) || studentId <= 0) {
+    throw new Error("Student ID must be a positive integer.");
   }
 
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv("aes-256-gcm", getEncryptionKey(), iv);
   const encryptedValue = Buffer.concat([
-    cipher.update(String(pupilId), "utf8"),
+    cipher.update(String(studentId), "utf8"),
     cipher.final(),
   ]);
   const authTag = cipher.getAuthTag();
@@ -56,7 +56,7 @@ export function encodePupilRouteId(pupilId: number) {
   return `${TOKEN_PREFIX}${toBase64Url(Buffer.concat([iv, authTag, encryptedValue]))}`;
 }
 
-export function decodePupilRouteId(token: string) {
+export function decodeStudentRouteId(token: string) {
   if (!token.startsWith(TOKEN_PREFIX)) {
     return null;
   }
@@ -79,13 +79,13 @@ export function decodePupilRouteId(token: string) {
       decipher.update(encryptedValue),
       decipher.final(),
     ]).toString("utf8");
-    const pupilId = Number(decryptedValue);
+    const studentId = Number(decryptedValue);
 
-    if (!Number.isInteger(pupilId) || pupilId <= 0) {
+    if (!Number.isInteger(studentId) || studentId <= 0) {
       return null;
     }
 
-    return pupilId;
+    return studentId;
   } catch {
     return null;
   }

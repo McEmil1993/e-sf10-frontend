@@ -1,8 +1,8 @@
 import type { GuardianFormValues, GuardianRecord } from "@/app/types/guardianTypes";
 
-export type PupilGuardianRecord = {
+export type StudentGuardianRecord = {
   id: number;
-  pupil_id: number;
+  student_id: number;
   guardian_id: number;
   relationship: string;
   is_primary: boolean;
@@ -12,14 +12,14 @@ export type PupilGuardianRecord = {
   deleted_at: string | null;
 };
 
-export type PupilGuardianFormValues = GuardianFormValues & {
+export type StudentGuardianFormValues = GuardianFormValues & {
   guardian_source: string;
   guardian_id: string;
   relationship: string;
   is_primary: string;
 };
 
-export type PupilGuardianRelationFormValues = {
+export type StudentGuardianRelationFormValues = {
   relationship: string;
   is_primary: string;
 };

@@ -42,7 +42,7 @@ export default function BackupControlsSection({
       <BackupPanelCard
         badgeClassName="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800"
         badgeLabel="Export"
-        description="Generate a fresh export of users, pupils, positions, and RBAC data."
+        description="Generate a fresh export of users, students, positions, and RBAC data."
         footer={
           <Button disabled={isExporting || isImporting} onClick={onExport}>
             {isExporting ? "Exporting database..." : "Export Database Backup"}

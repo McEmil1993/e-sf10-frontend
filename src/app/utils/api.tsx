@@ -7,8 +7,12 @@ import type {
   BackendGuardianResponseDto,
   BackendModuleResponseDto,
   BackendPermissionResponseDto,
-  BackendPupilGuardianResponseDto,
-  BackendPupilResponseDto,
+  BackendSchoolSettingsResponseDto,
+  BackendStudentInformationLookupDto,
+  BackendStudentInformationLookupsResponseDto,
+  BackendStudentInformationResponseDto,
+  BackendStudentGuardianResponseDto,
+  BackendStudentResponseDto,
   BackendPositionResponseDto,
   BackendRoleResponseDto,
   BackendUserResponseDto,
@@ -16,11 +20,19 @@ import type {
 import type { AppIconName } from "@/app/types/iconTypes";
 import type { GuardianRecord } from "@/app/types/guardianTypes";
 import type {
-  PupilGuardianRecord,
-  PupilGuardianRelationFormValues,
-} from "@/app/types/pupilGuardianTypes";
-import type { PupilRecord, PupilSex, PupilStatus } from "@/app/types/pupilTypes";
+  StudentGuardianRecord,
+  StudentGuardianRelationFormValues,
+} from "@/app/types/studentGuardianTypes";
+import type {
+  StudentInformation,
+  StudentInformationLookup,
+  StudentInformationLookups,
+  StudentRecord,
+  StudentSex,
+  StudentStatus,
+} from "@/app/types/studentTypes";
 import type { AdminUser, ChangePasswordPayload, UserSex, UserStatus } from "@/app/types/userTypes";
+import type { SchoolSettings } from "@/app/types/systemTypes";
 
 export const AUTH_COOKIE_NAME = "tmc-itclub-session";
 export const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -168,7 +180,7 @@ function normalizeIconName(value: string | null): AppIconName {
   return "users";
 }
 
-function normalizePupilStatus(value: string | null): PupilStatus {
+function normalizeStudentStatus(value: string | null): StudentStatus {
   if (
     value === "active" ||
     value === "inactive" ||
@@ -181,7 +193,7 @@ function normalizePupilStatus(value: string | null): PupilStatus {
   return "active";
 }
 
-function normalizePupilSex(value: string | null): PupilSex {
+function normalizeStudentSex(value: string | null): StudentSex {
   if (value === "female") {
     return "female";
   }
@@ -250,36 +262,36 @@ function mapBackendUserToAdminUser(user: BackendUserResponseDto): AdminUser {
   };
 }
 
-function mapBackendPupilToPupilRecord(pupil: BackendPupilResponseDto): PupilRecord {
-  const firstName = pupil.firstName.trim();
-  const middleName = pupil.middleName?.trim() ?? "";
-  const lastName = pupil.lastName.trim();
-  const suffix = pupil.suffix?.trim() ?? "";
-  const storedProfilePicture = toStoredAssetPath(pupil.profilePicture ?? "");
+function mapBackendStudentToStudentRecord(student: BackendStudentResponseDto): StudentRecord {
+  const firstName = student.firstName.trim();
+  const middleName = student.middleName?.trim() ?? "";
+  const lastName = student.lastName.trim();
+  const suffix = student.suffix?.trim() ?? "";
+  const storedProfilePicture = toStoredAssetPath(student.profilePicture ?? "");
   const profilePicture = resolveBackendAssetUrl(storedProfilePicture);
 
   return {
-    id: pupil.id,
-    lrn: pupil.lrn,
-    full_name: buildFullNameFromParts([firstName, middleName, lastName, suffix]) || pupil.lrn,
+    id: student.id,
+    lrn: student.lrn,
+    full_name: buildFullNameFromParts([firstName, middleName, lastName, suffix]) || student.lrn,
     first_name: firstName,
     middle_name: middleName,
     last_name: lastName,
     suffix,
-    sex: normalizePupilSex(pupil.sex),
-    birthdate: pupil.birthdate,
-    birthplace: pupil.birthplace?.trim() ?? "",
-    street_address: pupil.streetAddress?.trim() ?? "",
-    barangay: pupil.barangay.trim(),
-    city_municipality: pupil.cityMunicipality.trim(),
-    province: pupil.province.trim(),
-    region: pupil.region.trim(),
-    status: normalizePupilStatus(pupil.status),
+    sex: normalizeStudentSex(student.sex),
+    birthdate: student.birthdate,
+    birthplace: student.birthplace?.trim() ?? "",
+    street_address: student.streetAddress?.trim() ?? "",
+    barangay: student.barangay.trim(),
+    city_municipality: student.cityMunicipality.trim(),
+    province: student.province.trim(),
+    region: student.region.trim(),
+    status: normalizeStudentStatus(student.status),
     avatar: profilePicture,
     profile_picture: storedProfilePicture,
-    created_at: pupil.createdAt,
-    updated_at: pupil.updatedAt,
-    deleted_at: pupil.deletedAt,
+    created_at: student.createdAt,
+    updated_at: student.updatedAt,
+    deleted_at: student.deletedAt,
   };
 }
 
@@ -312,12 +324,12 @@ function mapBackendGuardianToGuardianRecord(guardian: BackendGuardianResponseDto
   };
 }
 
-function mapBackendPupilGuardianToPupilGuardianRecord(
-  relation: BackendPupilGuardianResponseDto,
-): PupilGuardianRecord {
+function mapBackendStudentGuardianToStudentGuardianRecord(
+  relation: BackendStudentGuardianResponseDto,
+): StudentGuardianRecord {
   return {
     id: relation.id,
-    pupil_id: relation.pupilId,
+    student_id: relation.studentId,
     guardian_id: relation.guardianId,
     relationship: relation.relationship.trim(),
     is_primary: Boolean(relation.isPrimary),
@@ -325,6 +337,60 @@ function mapBackendPupilGuardianToPupilGuardianRecord(
     created_at: relation.createdAt,
     updated_at: relation.updatedAt,
     deleted_at: relation.deletedAt,
+  };
+}
+
+function mapBackendStudentInformationLookup(
+  lookup: BackendStudentInformationLookupDto,
+): StudentInformationLookup {
+  return {
+    id: lookup.id,
+    name: lookup.name,
+    sort_order: lookup.sortOrder,
+    is_active: Boolean(lookup.isActive),
+  };
+}
+
+function mapBackendStudentInformationLookups(
+  lookups: BackendStudentInformationLookupsResponseDto,
+): StudentInformationLookups {
+  return {
+    mother_tongues: lookups.motherTongues.map(mapBackendStudentInformationLookup),
+    indigenous_groups: lookups.indigenousGroups.map(mapBackendStudentInformationLookup),
+    religions: lookups.religions.map(mapBackendStudentInformationLookup),
+  };
+}
+
+function mapBackendStudentInformation(
+  information: BackendStudentInformationResponseDto,
+): StudentInformation {
+  return {
+    student_id: information.studentId,
+    mother_tongue: information.motherTongue
+      ? mapBackendStudentInformationLookup(information.motherTongue)
+      : null,
+    indigenous_group: information.indigenousGroup
+      ? mapBackendStudentInformationLookup(information.indigenousGroup)
+      : null,
+    religion: information.religion ? mapBackendStudentInformationLookup(information.religion) : null,
+  };
+}
+
+function mapBackendSchoolSettings(school: BackendSchoolSettingsResponseDto): SchoolSettings {
+  return {
+    school_id: school.schoolId,
+    deped_school_id: school.depedSchoolId,
+    school_name: school.schoolName,
+    district: school.district,
+    division: school.division,
+    region: school.region,
+    address: school.address,
+    school_logo: toStoredAssetPath(school.schoolLogo),
+    deped_logo: toStoredAssetPath(school.depedLogo),
+    other_logo: toStoredAssetPath(school.otherLogo),
+    created_at: school.createdAt,
+    updated_at: school.updatedAt,
+    deleted_at: school.deletedAt,
   };
 }
 
@@ -475,7 +541,7 @@ async function prepareUserPayload(
   return mapUserPayloadToBackend(nextPayload, mode);
 }
 
-async function preparePupilPayload(
+async function prepareStudentPayload(
   payload: Record<string, unknown>,
   mode: "create" | "update",
   token?: string,
@@ -489,7 +555,7 @@ async function preparePupilPayload(
     );
   }
 
-  return mapPupilPayloadToBackend(nextPayload, mode);
+  return mapStudentPayloadToBackend(nextPayload, mode);
 }
 
 async function prepareGuardianPayload(
@@ -509,7 +575,7 @@ async function prepareGuardianPayload(
   return mapGuardianPayloadToBackend(nextPayload, mode);
 }
 
-async function preparePupilGuardianPayload(
+async function prepareStudentGuardianPayload(
   payload: Record<string, unknown>,
   token?: string,
 ) {
@@ -525,7 +591,7 @@ async function preparePupilGuardianPayload(
     );
   }
 
-  return mapPupilGuardianPayloadToBackend(nextPayload);
+  return mapStudentGuardianPayloadToBackend(nextPayload);
 }
 
 function mapBackendRoleToAppRole(role: BackendRoleResponseDto): AppRole {
@@ -686,7 +752,7 @@ function mapPermissionPayloadToBackend(payload: Record<string, unknown>) {
   };
 }
 
-function mapPupilPayloadToBackend(payload: Record<string, unknown>, mode: "create" | "update") {
+function mapStudentPayloadToBackend(payload: Record<string, unknown>, mode: "create" | "update") {
   const backendPayload: Record<string, unknown> = {};
 
   if (mode === "create" || "lrn" in payload) {
@@ -802,7 +868,7 @@ function mapGuardianPayloadToBackend(payload: Record<string, unknown>, mode: "cr
   return backendPayload;
 }
 
-function mapPupilGuardianPayloadToBackend(payload: Record<string, unknown>) {
+function mapStudentGuardianPayloadToBackend(payload: Record<string, unknown>) {
   const rawGuardianId = payload.guardian_id;
   const guardianId =
     typeof rawGuardianId === "number"
@@ -836,13 +902,55 @@ function mapPupilGuardianPayloadToBackend(payload: Record<string, unknown>) {
   };
 }
 
-function mapPupilGuardianRelationPayloadToBackend(
-  payload: Pick<PupilGuardianRelationFormValues, "relationship" | "is_primary">,
+function mapStudentGuardianRelationPayloadToBackend(
+  payload: Pick<StudentGuardianRelationFormValues, "relationship" | "is_primary">,
 ) {
   return {
     relationship: toNullableString(payload.relationship) ?? "",
     isPrimary: payload.is_primary.trim().toLowerCase() === "true",
   };
+}
+
+function mapSchoolSettingsPayloadToBackend(payload: Record<string, unknown>) {
+  const backendPayload: Record<string, unknown> = {};
+
+  if ("deped_school_id" in payload) {
+    backendPayload.depedSchoolId = toNullableString(payload.deped_school_id);
+  }
+
+  if ("school_name" in payload) {
+    backendPayload.schoolName = toNullableString(payload.school_name);
+  }
+
+  if ("district" in payload) {
+    backendPayload.district = toNullableString(payload.district);
+  }
+
+  if ("division" in payload) {
+    backendPayload.division = toNullableString(payload.division);
+  }
+
+  if ("region" in payload) {
+    backendPayload.region = toNullableString(payload.region);
+  }
+
+  if ("address" in payload) {
+    backendPayload.address = toNullableString(payload.address);
+  }
+
+  if ("school_logo" in payload) {
+    backendPayload.schoolLogo = toNullableString(payload.school_logo);
+  }
+
+  if ("deped_logo" in payload) {
+    backendPayload.depedLogo = toNullableString(payload.deped_logo);
+  }
+
+  if ("other_logo" in payload) {
+    backendPayload.otherLogo = toNullableString(payload.other_logo);
+  }
+
+  return backendPayload;
 }
 
 export function toSessionUser(user: AdminUser): SessionUser {
@@ -1119,96 +1227,130 @@ export async function deleteUser(userId: number, token?: string) {
   });
 }
 
-export async function listPupils(token?: string) {
-  const pupils = await requestAuthenticatedApi<BackendPupilResponseDto[]>("/pupils", { token });
-  return pupils.map(mapBackendPupilToPupilRecord);
+export async function listStudents(token?: string) {
+  const students = await requestAuthenticatedApi<BackendStudentResponseDto[]>("/students", { token });
+  return students.map(mapBackendStudentToStudentRecord);
 }
 
-export async function getPupil(pupilId: number, token?: string) {
-  const pupil = await requestAuthenticatedApi<BackendPupilResponseDto>(`/pupils/${pupilId}`, {
+export async function getStudent(studentId: number, token?: string) {
+  const student = await requestAuthenticatedApi<BackendStudentResponseDto>(`/students/${studentId}`, {
     token,
   });
 
-  return mapBackendPupilToPupilRecord(pupil);
+  return mapBackendStudentToStudentRecord(student);
 }
 
-export async function createPupil(payload: Record<string, unknown>, token?: string) {
-  const pupil = await requestAuthenticatedApi<BackendPupilResponseDto>("/pupils", {
+export async function createStudent(payload: Record<string, unknown>, token?: string) {
+  const student = await requestAuthenticatedApi<BackendStudentResponseDto>("/students", {
     method: "POST",
-    body: await preparePupilPayload(payload, "create", token),
+    body: await prepareStudentPayload(payload, "create", token),
     token,
   });
 
-  return mapBackendPupilToPupilRecord(pupil);
+  return mapBackendStudentToStudentRecord(student);
 }
 
-export async function updatePupil(pupilId: number, payload: Record<string, unknown>, token?: string) {
-  const pupil = await requestAuthenticatedApi<BackendPupilResponseDto>(`/pupils/${pupilId}`, {
+export async function updateStudent(studentId: number, payload: Record<string, unknown>, token?: string) {
+  const student = await requestAuthenticatedApi<BackendStudentResponseDto>(`/students/${studentId}`, {
     method: "PUT",
-    body: await preparePupilPayload(payload, "update", token),
+    body: await prepareStudentPayload(payload, "update", token),
     token,
   });
 
-  return mapBackendPupilToPupilRecord(pupil);
+  return mapBackendStudentToStudentRecord(student);
 }
 
-export async function deletePupil(pupilId: number, token?: string) {
-  await requestAuthenticatedApi(`/pupils/${pupilId}`, {
+export async function deleteStudent(studentId: number, token?: string) {
+  await requestAuthenticatedApi(`/students/${studentId}`, {
     method: "DELETE",
     token,
   });
 }
 
-export async function listPupilGuardians(pupilId: number, token?: string) {
-  const relations = await requestAuthenticatedApi<BackendPupilGuardianResponseDto[]>(
-    `/pupils/${pupilId}/guardians`,
+export async function listStudentInformationLookups(token?: string) {
+  const lookups = await requestAuthenticatedApi<BackendStudentInformationLookupsResponseDto>("/students/lookups", {
+    token,
+  });
+
+  return mapBackendStudentInformationLookups(lookups);
+}
+
+export async function getStudentInformation(studentId: number, token?: string) {
+  const information = await requestAuthenticatedApi<BackendStudentInformationResponseDto>(
+    `/students/${studentId}/information`,
     { token },
   );
 
-  return relations.map(mapBackendPupilGuardianToPupilGuardianRecord);
+  return mapBackendStudentInformation(information);
 }
 
-export async function createPupilGuardian(
-  pupilId: number,
+export async function updateStudentInformation(
+  studentId: number,
   payload: Record<string, unknown>,
   token?: string,
 ) {
-  const relation = await requestAuthenticatedApi<BackendPupilGuardianResponseDto>(
-    `/pupils/${pupilId}/guardians`,
-    {
-      method: "POST",
-      body: await preparePupilGuardianPayload(payload, token),
-      token,
-    },
-  );
-
-  return mapBackendPupilGuardianToPupilGuardianRecord(relation);
-}
-
-export async function updatePupilGuardian(
-  pupilId: number,
-  relationId: number,
-  payload: Pick<PupilGuardianRelationFormValues, "relationship" | "is_primary">,
-  token?: string,
-) {
-  const relation = await requestAuthenticatedApi<BackendPupilGuardianResponseDto>(
-    `/pupils/${pupilId}/guardians/${relationId}`,
+  const information = await requestAuthenticatedApi<BackendStudentInformationResponseDto>(
+    `/students/${studentId}/information`,
     {
       method: "PUT",
-      body: mapPupilGuardianRelationPayloadToBackend(payload),
+      body: payload,
       token,
     },
   );
 
-  return mapBackendPupilGuardianToPupilGuardianRecord(relation);
+  return mapBackendStudentInformation(information);
 }
 
-export async function deletePupilGuardian(
-  pupilId: number,
+export async function listStudentGuardians(studentId: number, token?: string) {
+  const relations = await requestAuthenticatedApi<BackendStudentGuardianResponseDto[]>(
+    `/students/${studentId}/guardians`,
+    { token },
+  );
+
+  return relations.map(mapBackendStudentGuardianToStudentGuardianRecord);
+}
+
+export async function createStudentGuardian(
+  studentId: number,
+  payload: Record<string, unknown>,
+  token?: string,
+) {
+  const relation = await requestAuthenticatedApi<BackendStudentGuardianResponseDto>(
+    `/students/${studentId}/guardians`,
+    {
+      method: "POST",
+      body: await prepareStudentGuardianPayload(payload, token),
+      token,
+    },
+  );
+
+  return mapBackendStudentGuardianToStudentGuardianRecord(relation);
+}
+
+export async function updateStudentGuardian(
+  studentId: number,
+  relationId: number,
+  payload: Pick<StudentGuardianRelationFormValues, "relationship" | "is_primary">,
+  token?: string,
+) {
+  const relation = await requestAuthenticatedApi<BackendStudentGuardianResponseDto>(
+    `/students/${studentId}/guardians/${relationId}`,
+    {
+      method: "PUT",
+      body: mapStudentGuardianRelationPayloadToBackend(payload),
+      token,
+    },
+  );
+
+  return mapBackendStudentGuardianToStudentGuardianRecord(relation);
+}
+
+export async function deleteStudentGuardian(
+  studentId: number,
   relationId: number,
   token?: string,
 ) {
-  await requestAuthenticatedApi(`/pupils/${pupilId}/guardians/${relationId}`, {
+  await requestAuthenticatedApi(`/students/${studentId}/guardians/${relationId}`, {
     method: "DELETE",
     token,
   });
@@ -1253,6 +1395,24 @@ export async function listRoles(token?: string) {
 
 export async function listPositions(token?: string) {
   return requestAuthenticatedApi<BackendPositionResponseDto[]>("/positions", { token });
+}
+
+export async function getSchoolSettings(token?: string) {
+  const school = await requestAuthenticatedApi<BackendSchoolSettingsResponseDto>("/system/school", {
+    token,
+  });
+
+  return mapBackendSchoolSettings(school);
+}
+
+export async function updateSchoolSettings(payload: Record<string, unknown>, token?: string) {
+  const school = await requestAuthenticatedApi<BackendSchoolSettingsResponseDto>("/system/school", {
+    method: "PUT",
+    body: mapSchoolSettingsPayloadToBackend(payload),
+    token,
+  });
+
+  return mapBackendSchoolSettings(school);
 }
 
 export async function createRole(payload: Record<string, unknown>, token?: string) {

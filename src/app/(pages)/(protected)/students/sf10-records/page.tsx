@@ -1,11 +1,11 @@
 import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
 
-export default function PupilsSf10RecordsPage() {
+export default function StudentsSf10RecordsPage() {
   return (
     <PagePlaceholder
-      breadcrumb="Home > Pupils > SF10 Records"
+      breadcrumb="Home > Students > SF10 Records"
       description="This page is ready for SF10 record viewing and management."
-      sectionLabel="Pupils panel"
+      sectionLabel="Students panel"
       title="SF10 Records"
     />
   );

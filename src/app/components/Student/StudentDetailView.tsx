@@ -6,8 +6,8 @@ import Button from "@/app/components/Button/Button";
 import ConfirmModal from "@/app/components/Modal/ConfirmModal";
 import FormModal from "@/app/components/Modal/FormModal";
 import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
-import PupilGuardianCard from "@/app/components/Pupil/PupilGuardianCard";
-import PupilSummaryCard from "@/app/components/Pupil/PupilSummaryCard";
+import StudentGuardianCard from "@/app/components/Student/StudentGuardianCard";
+import StudentSummaryCard from "@/app/components/Student/StudentSummaryCard";
 import DetailItem from "@/app/components/RecordView/DetailItem";
 import SectionCard from "@/app/components/RecordView/SectionCard";
 import ToastViewport from "@/app/components/Toast/ToastViewport";
@@ -21,24 +21,35 @@ import type { ModalField, ModalFieldOption } from "@/app/types/components/modalT
 import type { ToastItem } from "@/app/types/components/toastTypes";
 import type { GuardianRecord } from "@/app/types/guardianTypes";
 import type {
-  PupilGuardianFormValues,
-  PupilGuardianRecord,
-  PupilGuardianRelationFormValues,
-} from "@/app/types/pupilGuardianTypes";
-import type { PupilRecord } from "@/app/types/pupilTypes";
+  StudentGuardianFormValues,
+  StudentGuardianRecord,
+  StudentGuardianRelationFormValues,
+} from "@/app/types/studentGuardianTypes";
+import type {
+  StudentInformation,
+  StudentRecord,
+} from "@/app/types/studentTypes";
 import {
-  createPupilGuardian,
-  deletePupilGuardian,
-  getPupil,
+  createStudentGuardian,
+  deleteStudentGuardian,
+  getStudent,
+  getStudentInformation,
   listGuardians,
-  listPupilGuardians,
-  updatePupilGuardian,
+  listStudentGuardians,
+  updateStudentGuardian,
 } from "@/app/utils/api";
 import { normalizeGuardianRecord } from "@/app/utils/guardiansApi";
-import { normalizePupilRecord } from "@/app/utils/pupilsApi";
+import { normalizeStudentRecord } from "@/app/utils/studentsApi";
 
-type PupilDetailViewProps = {
-  pupilId: number;
+type StudentDetailViewProps = {
+  studentId: number;
+};
+
+const emptyStudentInformation: StudentInformation = {
+  student_id: 0,
+  mother_tongue: null,
+  indigenous_group: null,
+  religion: null,
 };
 
 const suffixOptions: ModalFieldOption[] = (rawSuffixes as string[]).map((suffix) => ({
@@ -88,7 +99,7 @@ const regionOptions: ModalFieldOption[] = regions.map((region) => ({
   value: region.regionName,
 }));
 
-const emptyGuardianFormValues: PupilGuardianFormValues = {
+const emptyGuardianFormValues: StudentGuardianFormValues = {
   guardian_source: "new",
   guardian_id: "",
   profile_picture: "",
@@ -106,7 +117,7 @@ const emptyGuardianFormValues: PupilGuardianFormValues = {
   is_primary: "true",
 };
 
-const emptyGuardianRelationFormValues: PupilGuardianRelationFormValues = {
+const emptyGuardianRelationFormValues: StudentGuardianRelationFormValues = {
   relationship: "Guardian",
   is_primary: "false",
 };
@@ -142,12 +153,12 @@ function normalizeContactNumberInput(value: string) {
   return value.replace(/\D/g, "").slice(0, 20);
 }
 
-function buildPupilAddress(pupil: PupilRecord) {
+function buildStudentAddress(student: StudentRecord) {
   const addressParts = [
-    pupil.street_address,
-    pupil.barangay,
-    pupil.city_municipality,
-    pupil.province,
+    student.street_address,
+    student.barangay,
+    student.city_municipality,
+    student.province,
   ]
     .map((value) => value?.trim())
     .filter(Boolean);
@@ -301,20 +312,21 @@ function buildGuardianFields(
   ];
 }
 
-export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
+export default function StudentDetailView({ studentId }: StudentDetailViewProps) {
   const router = useRouter();
-  const [pupil, setPupil] = useState<PupilRecord | null>(null);
-  const [guardianRelations, setGuardianRelations] = useState<PupilGuardianRecord[]>([]);
+  const [student, setStudent] = useState<StudentRecord | null>(null);
+  const [studentInformation, setStudentInformation] = useState<StudentInformation>(emptyStudentInformation);
+  const [guardianRelations, setGuardianRelations] = useState<StudentGuardianRecord[]>([]);
   const [availableGuardians, setAvailableGuardians] = useState<GuardianRecord[]>([]);
-  const [guardianFormValues, setGuardianFormValues] = useState<PupilGuardianFormValues>(
+  const [guardianFormValues, setGuardianFormValues] = useState<StudentGuardianFormValues>(
     emptyGuardianFormValues,
   );
   const [guardianRelationFormValues, setGuardianRelationFormValues] =
-    useState<PupilGuardianRelationFormValues>(emptyGuardianRelationFormValues);
+    useState<StudentGuardianRelationFormValues>(emptyGuardianRelationFormValues);
   const [isGuardianModalOpen, setIsGuardianModalOpen] = useState(false);
   const [isGuardianRelationModalOpen, setIsGuardianRelationModalOpen] = useState(false);
-  const [relationToEdit, setRelationToEdit] = useState<PupilGuardianRecord | null>(null);
-  const [relationToDelete, setRelationToDelete] = useState<PupilGuardianRecord | null>(null);
+  const [relationToEdit, setRelationToEdit] = useState<StudentGuardianRecord | null>(null);
+  const [relationToDelete, setRelationToDelete] = useState<StudentGuardianRecord | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionRelationId, setActionRelationId] = useState<number | null>(null);
@@ -323,39 +335,43 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
 
   const loadGuardianDetails = useCallback(async () => {
     const [guardianData, guardiansData] = await Promise.all([
-      listPupilGuardians(pupilId),
+      listStudentGuardians(studentId),
       listGuardians().catch(() => []),
     ]);
 
     setGuardianRelations(guardianData);
     setAvailableGuardians(guardiansData.map(normalizeGuardianRecord));
-  }, [pupilId]);
+  }, [studentId]);
 
-  const loadPupilDetails = useCallback(async () => {
+  const loadStudentDetails = useCallback(async () => {
     try {
       setIsLoading(true);
       setErrorMessage(null);
 
-      const pupilData = await getPupil(pupilId);
+      const [studentData, informationData] = await Promise.all([
+        getStudent(studentId),
+        getStudentInformation(studentId),
+      ]);
 
-      setPupil(normalizePupilRecord(pupilData));
+      setStudent(normalizeStudentRecord(studentData));
+      setStudentInformation(informationData);
       await loadGuardianDetails();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to load the pupil details.");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to load the student details.");
     } finally {
       setIsLoading(false);
     }
-  }, [loadGuardianDetails, pupilId]);
+  }, [loadGuardianDetails, studentId]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void loadPupilDetails();
+      void loadStudentDetails();
     }, 0);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [loadPupilDetails]);
+  }, [loadStudentDetails]);
 
   const selectedRegion = useMemo(
     () => regions.find((region) => region.regionName === guardianFormValues.region || region.name === guardianFormValues.region) ?? null,
@@ -509,7 +525,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
     setGuardianFormValues(emptyGuardianFormValues);
   }
 
-  function openGuardianRelationModal(relation: PupilGuardianRecord) {
+  function openGuardianRelationModal(relation: StudentGuardianRecord) {
     setRelationToEdit(relation);
     setGuardianRelationFormValues({
       relationship: relation.relationship,
@@ -524,7 +540,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
     setGuardianRelationFormValues(emptyGuardianRelationFormValues);
   }
 
-  function openDeleteGuardianModal(relation: PupilGuardianRecord) {
+  function openDeleteGuardianModal(relation: StudentGuardianRecord) {
     setRelationToDelete(relation);
   }
 
@@ -656,7 +672,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
 
     try {
       setIsSubmitting(true);
-      await createPupilGuardian(pupilId, buildGuardianPayload());
+      await createStudentGuardian(studentId, buildGuardianPayload());
       await loadGuardianDetails();
 
       closeGuardianModal();
@@ -684,7 +700,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
       setIsSubmitting(true);
       setActionRelationId(relationToEdit.id);
 
-      await updatePupilGuardian(pupilId, relationToEdit.id, guardianRelationFormValues);
+      await updateStudentGuardian(studentId, relationToEdit.id, guardianRelationFormValues);
       await loadGuardianDetails();
 
       closeGuardianRelationModal();
@@ -713,7 +729,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
       setIsSubmitting(true);
       setActionRelationId(relationToDelete.id);
 
-      await deletePupilGuardian(pupilId, relationToDelete.id);
+      await deleteStudentGuardian(studentId, relationToDelete.id);
       await loadGuardianDetails();
 
       closeDeleteGuardianModal();
@@ -735,51 +751,54 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
 
   return (
     <PagePlaceholder
-      breadcrumb="Home > Pupils > Information > View"
-      sectionLabel="Pupils panel"
-      title="Pupil Information"
+      breadcrumb="Home > Students > Information > View"
+      sectionLabel="Students panel"
+      title="Student Information"
     >
       <ToastViewport onDismiss={dismissToast} toasts={toasts} />
 
       <div className="flex justify-start">
-        <Button onClick={() => router.push("/pupils/information")} size="sm" variant="secondary">
+        <Button onClick={() => router.push("/students/information")} size="sm" variant="secondary">
           Back to List
         </Button>
       </div>
 
       {isLoading ? (
         <section className="rounded-[5px] border border-border bg-card px-5 py-10 text-sm text-muted shadow-sm">
-          Loading pupil information...
+          Loading student information...
         </section>
-      ) : errorMessage || !pupil ? (
+      ) : errorMessage || !student ? (
         <section className="space-y-4 rounded-[5px] border border-rose-200 bg-rose-50 px-5 py-5 shadow-sm">
-          <p className="text-sm text-rose-700">{errorMessage ?? "Pupil not found."}</p>
+          <p className="text-sm text-rose-700">{errorMessage ?? "Student not found."}</p>
           <div className="flex gap-3">
-            <Button onClick={() => void loadPupilDetails()} size="sm" variant="secondary">
+            <Button onClick={() => void loadStudentDetails()} size="sm" variant="secondary">
               Retry
             </Button>
-            <Button onClick={() => router.push("/pupils/information")} size="sm">
-              Go to Pupil List
+            <Button onClick={() => router.push("/students/information")} size="sm">
+              Go to Student List
             </Button>
           </div>
         </section>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <PupilSummaryCard pupil={pupil} />
+          <StudentSummaryCard student={student} />
 
           <div className="space-y-5">
-            <SectionCard title="Pupil Information">
+            <SectionCard title="Student Information">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <DetailItem label="Full Name" value={pupil.full_name} />
-                <DetailItem label="LRN" value={pupil.lrn} />
-                <DetailItem label="Sex" value={pupil.sex.charAt(0).toUpperCase() + pupil.sex.slice(1)} />
-                <DetailItem label="Birthdate" value={formatDate(pupil.birthdate)} />
-                <DetailItem label="Birthplace" value={pupil.birthplace || "-"} />
-                <DetailItem label="Status" value={pupil.status.charAt(0).toUpperCase() + pupil.status.slice(1)} />
+                <DetailItem label="Full Name" value={student.full_name} />
+                <DetailItem label="LRN" value={student.lrn} />
+                <DetailItem label="Sex" value={student.sex.charAt(0).toUpperCase() + student.sex.slice(1)} />
+                <DetailItem label="Birthdate" value={formatDate(student.birthdate)} />
+                <DetailItem label="Birthplace" value={student.birthplace || "-"} />
+                <DetailItem label="Status" value={student.status.charAt(0).toUpperCase() + student.status.slice(1)} />
+                <DetailItem label="Mother Tongue" value={studentInformation.mother_tongue?.name ?? "-"} />
+                <DetailItem label="IP (Ethnic Group)" value={studentInformation.indigenous_group?.name ?? "-"} />
+                <DetailItem label="Religion" value={studentInformation.religion?.name ?? "-"} />
                 <DetailItem
                   className="md:col-span-2 xl:col-span-3"
                   label="Address"
-                  value={buildPupilAddress(pupil)}
+                  value={buildStudentAddress(student)}
                 />
               </div>
             </SectionCard>
@@ -796,7 +815,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
                 <div className="rounded-[5px] border border-dashed border-border bg-background px-4 py-6 text-center">
                   <p className="text-sm font-medium text-slate-700">No guardian assigned yet.</p>
                   <p className="mt-1 text-xs text-muted">
-                    Add the primary guardian to connect this pupil to the guardians table.
+                    Add the primary guardian to connect this student to the guardians table.
                   </p>
                   <div className="mt-4 flex justify-center">
                     <Button disabled={isSubmitting} onClick={openGuardianModal} size="xs">
@@ -807,7 +826,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
               ) : (
                 <div className="space-y-4">
                   {sortedGuardianRelations.map((relation) => (
-                    <PupilGuardianCard
+                    <StudentGuardianCard
                       isBusy={isSubmitting && actionRelationId === relation.id}
                       key={relation.id}
                       onDelete={() => openDeleteGuardianModal(relation)}
@@ -823,7 +842,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
       )}
 
       <FormModal
-              showBodyDivider={true}
+        showBodyDivider={true}
         dividerAfterIndex={0}
         bodyClassName="px-5 py-5 sm:px-5 sm:py-5"
         columns={3}
@@ -849,7 +868,7 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
       <FormModal
         bodyClassName="px-5 py-5 sm:px-5 sm:py-5"
         columns={3}
-        description="This updates the pupil_guardians relation only. Guardian profile details stay in the guardians table."
+        description="This updates the student_guardians relation only. Guardian profile details stay in the guardians table."
         fields={guardianRelationFields}
         fieldClassName="space-y-1"
         footerClassName="border-t border-border bg-card px-5 py-4 sm:px-5"
@@ -872,8 +891,8 @@ export default function PupilDetailView({ pupilId }: PupilDetailViewProps) {
       <ConfirmModal
         confirmClassName="border border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700 focus-visible:outline-rose-600"
         confirmLabel={isSubmitting ? "Removing..." : "Remove"}
-        description="Remove this guardian link from the pupil"
-        emphasisMessage="This will only unlink the guardian from this pupil. The guardian record will stay in the guardians table."
+        description="Remove this guardian link from the student"
+        emphasisMessage="This will only unlink the guardian from this student. The guardian record will stay in the guardians table."
         emphasisTone="danger"
         isOpen={Boolean(relationToDelete)}
         itemLabel={relationToDelete?.guardian.full_name ?? "this guardian"}

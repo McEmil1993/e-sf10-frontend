@@ -2,21 +2,21 @@ import { DeleteIcon, EditIcon } from "@/app/components/Icon/UserActionIcons";
 import AuthenticatedImage from "@/app/components/Image/AuthenticatedImage";
 import DetailItem from "@/app/components/RecordView/DetailItem";
 import { getInitials } from "@/app/lib/display";
-import type { PupilGuardianRecord } from "@/app/types/pupilGuardianTypes";
+import type { StudentGuardianRecord } from "@/app/types/studentGuardianTypes";
 
-type PupilGuardianCardProps = {
+type StudentGuardianCardProps = {
   isBusy?: boolean;
   onDelete: () => void;
   onEdit: () => void;
-  relation: PupilGuardianRecord;
+  relation: StudentGuardianRecord;
 };
 
-export default function PupilGuardianCard({
+export default function StudentGuardianCard({
   isBusy = false,
   onDelete,
   onEdit,
   relation,
-}: PupilGuardianCardProps) {
+}: StudentGuardianCardProps) {
   const { guardian } = relation;
   const combinedAddress = [
     guardian.address,

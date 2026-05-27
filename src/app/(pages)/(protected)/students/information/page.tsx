@@ -16,20 +16,35 @@ import rawRegions from "@/app/data/regions.json";
 import rawSuffixes from "@/app/data/suffixes.json";
 import type { ModalField, ModalFieldOption } from "@/app/types/components/modalTypes";
 import type { ToastItem } from "@/app/types/components/toastTypes";
-import type { PupilFormValues, PupilRecord, PupilStatus, PupilTableRow } from "@/app/types/pupilTypes";
+import type {
+  StudentFormValues,
+  StudentInformationLookups,
+  StudentInformationLookup,
+  StudentRecord,
+  StudentStatus,
+  StudentTableRow,
+} from "@/app/types/studentTypes";
 import type { TableColumn } from "@/app/types/tableTypes";
-import { createPupil, deletePupil, listPupils, updatePupil } from "@/app/utils/api";
-import { createPupilsResponse, normalizePupilRecord, toPupilTableRow } from "@/app/utils/pupilsApi";
+import {
+  createStudent,
+  deleteStudent,
+  getStudentInformation,
+  listStudentInformationLookups,
+  listStudents,
+  updateStudent,
+  updateStudentInformation,
+} from "@/app/utils/api";
+import { createStudentsResponse, normalizeStudentRecord, toStudentTableRow } from "@/app/utils/studentsApi";
 
 type DialogMode = "add" | "view" | "edit";
 
-type PupilDialogState = {
+type StudentDialogState = {
   mode: DialogMode;
-  pupilId: number | null;
+  studentId: number | null;
 };
 
-type PupilDeleteState = {
-  pupilId: number;
+type StudentDeleteState = {
+  studentId: number;
 };
 
 const statusToneMap = {
@@ -77,7 +92,7 @@ const regionOptions: ModalFieldOption[] = regions.map((region) => ({
   value: region.regionName,
 }));
 
-const emptyFormValues: PupilFormValues = {
+const emptyFormValues: StudentFormValues = {
   profile_picture: "",
   lrn: "",
   first_name: "",
@@ -93,6 +108,16 @@ const emptyFormValues: PupilFormValues = {
   province: "Bohol",
   region: "Region VII",
   status: "active",
+  mother_tongue: "",
+  indigenous_group: "",
+  indigenous_group_other: "",
+  religion: "",
+};
+
+const emptyLookupValues: StudentInformationLookups = {
+  mother_tongues: [],
+  indigenous_groups: [],
+  religions: [],
 };
 
 function createToastId() {
@@ -107,11 +132,59 @@ function normalizeLrnInput(value: string) {
   return value.replace(/\D/g, "").slice(0, 20);
 }
 
-function buildPupilFields(
+function toLookupOptions(values: StudentInformationLookup[]): ModalFieldOption[] {
+  return values.map((value) => ({
+    label: value.name,
+    value: value.name,
+  }));
+}
+
+function buildStudentFields(
   provinceOptions: ModalFieldOption[],
   cityMunicipalityOptions: ModalFieldOption[],
   barangayOptions: ModalFieldOption[],
+  motherTongueOptions: ModalFieldOption[],
+  indigenousGroupOptions: ModalFieldOption[],
+  religionOptions: ModalFieldOption[],
+  selectedIndigenousGroup: string,
 ): ModalField[] {
+  const informationFields: ModalField[] = [
+    {
+      name: "mother_tongue",
+      label: "Mother Tongue",
+      type: "lookup",
+      options: motherTongueOptions,
+      placeholder: "Cebuano / Bisaya",
+      layoutClassName: "md:col-span-6 xl:col-span-4",
+    },
+    {
+      name: "indigenous_group",
+      label: "IP (Ethnic Group)",
+      type: "lookup",
+      options: indigenousGroupOptions,
+      placeholder: "Non-IP / Not Applicable",
+      layoutClassName: "md:col-span-6 xl:col-span-4",
+    },
+    ...(selectedIndigenousGroup === "Other"
+      ? [
+          {
+            name: "indigenous_group_other",
+            label: "Specify IP / Ethnic Group",
+            placeholder: "Enter group name",
+            layoutClassName: "md:col-span-6 xl:col-span-4",
+          } satisfies ModalField,
+        ]
+      : []),
+    {
+      name: "religion",
+      label: "Religion",
+      type: "lookup",
+      options: religionOptions,
+      placeholder: "Roman Catholic",
+      layoutClassName: "md:col-span-6 xl:col-span-4",
+    },
+  ];
+
   return [
     {
       name: "profile_picture",
@@ -186,6 +259,7 @@ function buildPupilFields(
       placeholder: "Talisay City",
       layoutClassName: "md:col-span-6 xl:col-span-6",
     },
+    ...informationFields,
     {
       name: "region",
       label: "Region",
@@ -227,69 +301,78 @@ function buildPupilFields(
   ];
 }
 
-function normalizeFormValues(pupil: PupilRecord | null): PupilFormValues {
-  if (!pupil) {
+function normalizeFormValues(student: StudentRecord | null): StudentFormValues {
+  if (!student) {
     return emptyFormValues;
   }
 
   return {
-    profile_picture: pupil.profile_picture ?? pupil.avatar ?? "",
-    lrn: pupil.lrn,
-    first_name: pupil.first_name,
-    middle_name: pupil.middle_name ?? "",
-    last_name: pupil.last_name,
-    suffix: pupil.suffix ?? "",
-    sex: pupil.sex,
-    birthdate: pupil.birthdate,
-    birthplace: pupil.birthplace ?? "",
-    street_address: pupil.street_address ?? "",
-    barangay: pupil.barangay,
-    city_municipality: pupil.city_municipality,
-    province: pupil.province,
-    region: pupil.region,
-    status: pupil.status,
+    profile_picture: student.profile_picture ?? student.avatar ?? "",
+    lrn: student.lrn,
+    first_name: student.first_name,
+    middle_name: student.middle_name ?? "",
+    last_name: student.last_name,
+    suffix: student.suffix ?? "",
+    sex: student.sex,
+    birthdate: student.birthdate,
+    birthplace: student.birthplace ?? "",
+    street_address: student.street_address ?? "",
+    barangay: student.barangay,
+    city_municipality: student.city_municipality,
+    province: student.province,
+    region: student.region,
+    status: student.status,
+    mother_tongue: "",
+    indigenous_group: "",
+    indigenous_group_other: "",
+    religion: "",
   };
 }
 
-export default function PupilsInformationPage() {
+export default function StudentsInformationPage() {
   const router = useRouter();
-  const [pupils, setPupils] = useState<PupilRecord[]>([]);
+  const [students, setStudents] = useState<StudentRecord[]>([]);
+  const [lookupValues, setLookupValues] = useState<StudentInformationLookups>(emptyLookupValues);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [dialogState, setDialogState] = useState<PupilDialogState | null>(null);
-  const [deleteState, setDeleteState] = useState<PupilDeleteState | null>(null);
-  const [formValues, setFormValues] = useState<PupilFormValues>(emptyFormValues);
+  const [dialogState, setDialogState] = useState<StudentDialogState | null>(null);
+  const [deleteState, setDeleteState] = useState<StudentDeleteState | null>(null);
+  const [formValues, setFormValues] = useState<StudentFormValues>(emptyFormValues);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const pupilsResponse = useMemo(
+  const studentsResponse = useMemo(
     () =>
-      createPupilsResponse(pupils, {
+      createStudentsResponse(students, {
         page: currentPage,
         perPage: pageSize,
         search: searchTerm,
         sortBy: "created_at",
         sortOrder: "desc",
-        basePath: "/pupils/information",
+        basePath: "/students/information",
       }),
-    [currentPage, pageSize, pupils, searchTerm],
+    [currentPage, pageSize, students, searchTerm],
   );
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadPupils() {
+    async function loadStudents() {
       try {
         setIsLoading(true);
-        const pupilData = await listPupils();
+        const [studentData, studentLookupData] = await Promise.all([
+          listStudents(),
+          listStudentInformationLookups(),
+        ]);
 
         if (!isMounted) {
           return;
         }
 
-        setPupils(pupilData.map(normalizePupilRecord));
+        setStudents(studentData.map(normalizeStudentRecord));
+        setLookupValues(studentLookupData);
       } catch (error) {
         if (!isMounted) {
           return;
@@ -297,7 +380,7 @@ export default function PupilsInformationPage() {
 
         showToast({
           tone: "error",
-          title: "Unable to load pupils.",
+          title: "Unable to load students.",
           description: error instanceof Error ? error.message : "Please try again in a moment.",
         });
       } finally {
@@ -307,7 +390,7 @@ export default function PupilsInformationPage() {
       }
     }
 
-    void loadPupils();
+    void loadStudents();
 
     return () => {
       isMounted = false;
@@ -381,19 +464,51 @@ export default function PupilsInformationPage() {
     [selectedCityMunicipality],
   );
 
-  const pupilFields = useMemo(
-    () => buildPupilFields(provinceOptions, cityMunicipalityOptions, barangayOptions),
-    [barangayOptions, cityMunicipalityOptions, provinceOptions],
+  const motherTongueOptions = useMemo(
+    () => toLookupOptions(lookupValues.mother_tongues),
+    [lookupValues.mother_tongues],
   );
 
-  const deleteTargetPupil = useMemo(
-    () => pupils.find((pupil) => pupil.id === deleteState?.pupilId) ?? null,
-    [deleteState?.pupilId, pupils],
+  const indigenousGroupOptions = useMemo(
+    () => toLookupOptions(lookupValues.indigenous_groups),
+    [lookupValues.indigenous_groups],
   );
 
-  const tablePupils: PupilTableRow[] = useMemo(
-    () => pupilsResponse.data.map(toPupilTableRow),
-    [pupilsResponse.data],
+  const religionOptions = useMemo(
+    () => toLookupOptions(lookupValues.religions),
+    [lookupValues.religions],
+  );
+
+  const studentFields = useMemo(
+    () =>
+      buildStudentFields(
+        provinceOptions,
+        cityMunicipalityOptions,
+        barangayOptions,
+        motherTongueOptions,
+        indigenousGroupOptions,
+        religionOptions,
+        formValues.indigenous_group,
+      ),
+    [
+      barangayOptions,
+      cityMunicipalityOptions,
+      formValues.indigenous_group,
+      indigenousGroupOptions,
+      motherTongueOptions,
+      provinceOptions,
+      religionOptions,
+    ],
+  );
+
+  const deleteTargetStudent = useMemo(
+    () => students.find((student) => student.id === deleteState?.studentId) ?? null,
+    [deleteState?.studentId, students],
+  );
+
+  const tableStudents: StudentTableRow[] = useMemo(
+    () => studentsResponse.data.map(toStudentTableRow),
+    [studentsResponse.data],
   );
 
   function showToast({
@@ -424,41 +539,58 @@ export default function PupilsInformationPage() {
     setFormValues(emptyFormValues);
     setDialogState({
       mode: "add",
-      pupilId: null,
+      studentId: null,
     });
   }
 
-  async function openViewPage(pupilId: number) {
+  async function openViewPage(studentId: number) {
     try {
-      const response = await fetch(`/api/pupils/route-token?id=${pupilId}`);
+      const response = await fetch(`/api/students/route-token?id=${studentId}`);
       const payload = (await response.json()) as { message?: string; token?: string };
 
       if (!response.ok || !payload.token) {
-        throw new Error(payload.message || "Unable to generate the pupil detail URL.");
+        throw new Error(payload.message || "Unable to generate the student detail URL.");
       }
 
-      router.push(`/pupils/information/${payload.token}`);
+      router.push(`/students/information/${payload.token}`);
     } catch (error) {
       showToast({
         tone: "error",
-        title: "Unable to open pupil details.",
+        title: "Unable to open student details.",
         description:
           error instanceof Error ? error.message : "Please try again in a moment.",
       });
     }
   }
 
-  function openEditModal(pupilId: number) {
-    const pupil = pupils.find((item) => item.id === pupilId) ?? null;
-    setFormValues(normalizeFormValues(pupil));
-    setDialogState({
-      mode: "edit",
-      pupilId,
-    });
+  async function openEditModal(studentId: number) {
+    const student = students.find((item) => item.id === studentId) ?? null;
+
+    try {
+      const information = await getStudentInformation(studentId);
+
+      setFormValues({
+        ...normalizeFormValues(student),
+        mother_tongue: information.mother_tongue?.name ?? "",
+        indigenous_group: information.indigenous_group?.name ?? "",
+        indigenous_group_other: "",
+        religion: information.religion?.name ?? "",
+      });
+      setDialogState({
+        mode: "edit",
+        studentId,
+      });
+    } catch (error) {
+      showToast({
+        tone: "error",
+        title: "Unable to load student information.",
+        description: error instanceof Error ? error.message : "Please try again in a moment.",
+      });
+    }
   }
 
-  function openDeleteModal(pupilId: number) {
-    setDeleteState({ pupilId });
+  function openDeleteModal(studentId: number) {
+    setDeleteState({ studentId });
   }
 
   function closeDialog() {
@@ -509,13 +641,22 @@ export default function PupilsInformationPage() {
       return;
     }
 
+    if (name === "indigenous_group") {
+      setFormValues((currentValue) => ({
+        ...currentValue,
+        indigenous_group: value,
+        indigenous_group_other: value === "Other" ? currentValue.indigenous_group_other : "",
+      }));
+      return;
+    }
+
     setFormValues((currentValue) => ({
       ...currentValue,
       [name]: value,
     }));
   }
 
-  function buildPupilPayload() {
+  function buildStudentPayload() {
     return {
       profile_picture: formValues.profile_picture.trim(),
       lrn: formValues.lrn.trim(),
@@ -531,11 +672,28 @@ export default function PupilsInformationPage() {
       city_municipality: formValues.city_municipality.trim(),
       province: formValues.province.trim(),
       region: formValues.region.trim(),
-      status: formValues.status as PupilStatus,
+      status: formValues.status as StudentStatus,
     };
   }
 
-  async function handleSavePupil() {
+  function buildStudentInformationPayload() {
+    const indigenousGroupOther = formValues.indigenous_group_other.trim();
+
+    return {
+      motherTongue: formValues.mother_tongue.trim() || null,
+      indigenousGroup:
+        formValues.indigenous_group.trim() === "Other"
+          ? "Other"
+          : formValues.indigenous_group.trim() || null,
+      indigenousGroupOther:
+        formValues.indigenous_group.trim() === "Other" && indigenousGroupOther
+          ? indigenousGroupOther
+          : undefined,
+      religion: formValues.religion.trim() || null,
+    };
+  }
+
+  async function handleSaveStudent() {
     if (!dialogState) {
       return;
     }
@@ -544,38 +702,40 @@ export default function PupilsInformationPage() {
       setIsSubmitting(true);
 
       if (dialogState.mode === "add") {
-        const createdPupil = await createPupil(buildPupilPayload());
+        const createdStudent = await createStudent(buildStudentPayload());
+        await updateStudentInformation(createdStudent.id, buildStudentInformationPayload());
 
-        setPupils((currentPupils) => [normalizePupilRecord(createdPupil), ...currentPupils]);
+        setStudents((currentStudents) => [normalizeStudentRecord(createdStudent), ...currentStudents]);
         setCurrentPage(1);
         closeDialog();
         showToast({
           tone: "success",
-          title: "Pupil created successfully.",
+          title: "Student created successfully.",
         });
         return;
       }
 
-      if (dialogState.mode === "edit" && dialogState.pupilId !== null) {
-        const updatedPupil = await updatePupil(dialogState.pupilId, buildPupilPayload());
+      if (dialogState.mode === "edit" && dialogState.studentId !== null) {
+        const updatedStudent = await updateStudent(dialogState.studentId, buildStudentPayload());
+        await updateStudentInformation(dialogState.studentId, buildStudentInformationPayload());
 
-        setPupils((currentPupils) =>
-          currentPupils.map((currentPupil) =>
-            currentPupil.id === dialogState.pupilId
-              ? normalizePupilRecord(updatedPupil)
-              : currentPupil,
+        setStudents((currentStudents) =>
+          currentStudents.map((currentStudent) =>
+            currentStudent.id === dialogState.studentId
+              ? normalizeStudentRecord(updatedStudent)
+              : currentStudent,
           ),
         );
         closeDialog();
         showToast({
           tone: "success",
-          title: "Pupil updated successfully.",
+          title: "Student updated successfully.",
         });
       }
     } catch (error) {
       showToast({
         tone: "error",
-        title: "Unable to save the pupil.",
+        title: "Unable to save the student.",
         description: error instanceof Error ? error.message : "Please try again in a moment.",
       });
     } finally {
@@ -583,27 +743,27 @@ export default function PupilsInformationPage() {
     }
   }
 
-  async function handleDeletePupil() {
-    if (!deleteState?.pupilId) {
+  async function handleDeleteStudent() {
+    if (!deleteState?.studentId) {
       return;
     }
 
     try {
       setIsSubmitting(true);
-      await deletePupil(deleteState.pupilId);
-      setPupils((currentPupils) => currentPupils.filter((pupil) => pupil.id !== deleteState.pupilId));
+      await deleteStudent(deleteState.studentId);
+      setStudents((currentStudents) => currentStudents.filter((student) => student.id !== deleteState.studentId));
       closeDeleteDialog();
       showToast({
         tone: "success",
-        title: "Pupil deleted successfully.",
-        description: deleteTargetPupil?.full_name
-          ? `${deleteTargetPupil.full_name} was removed from the list.`
+        title: "Student deleted successfully.",
+        description: deleteTargetStudent?.full_name
+          ? `${deleteTargetStudent.full_name} was removed from the list.`
           : undefined,
       });
     } catch (error) {
       showToast({
         tone: "error",
-        title: "Unable to delete the pupil.",
+        title: "Unable to delete the student.",
         description: error instanceof Error ? error.message : "Please try again in a moment.",
       });
     } finally {
@@ -611,10 +771,10 @@ export default function PupilsInformationPage() {
     }
   }
 
-  const columns: TableColumn<PupilTableRow>[] = [
+  const columns: TableColumn<StudentTableRow>[] = [
     {
       key: "full_name",
-      header: "Pupil",
+      header: "Student",
       type: "stacked",
       showAvatar: true,
       avatarImageKey: "avatar",
@@ -685,8 +845,8 @@ export default function PupilsInformationPage() {
 
   return (
     <PagePlaceholder
-      breadcrumb="Home > Pupils > Information"
-      sectionLabel="Pupils panel"
+      breadcrumb="Home > Students > Information"
+      sectionLabel="Students panel"
       title="Information"
     >
       <ToastViewport onDismiss={dismissToast} toasts={toasts} />
@@ -694,19 +854,19 @@ export default function PupilsInformationPage() {
       <div className="space-y-3">
         <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
           <Button disabled={isSubmitting} onClick={openAddModal} size="sm">
-            Add Pupil
+            Add Student
           </Button>
         </div>
 
         <Table
           columns={columns}
-          data={tablePupils}
-          emptyMessage={isLoading ? "Loading pupils..." : "No pupils found."}
+          data={tableStudents}
+          emptyMessage={isLoading ? "Loading students..." : "No students found."}
           pagination={{
-            page: pupilsResponse.meta.page,
-            perPage: pupilsResponse.meta.per_page,
-            total: pupilsResponse.meta.total,
-            totalPages: pupilsResponse.meta.total_pages,
+            page: studentsResponse.meta.page,
+            perPage: studentsResponse.meta.per_page,
+            total: studentsResponse.meta.total,
+            totalPages: studentsResponse.meta.total_pages,
             onPageChange: setCurrentPage,
             onPageSizeChange: (value) => {
               setPageSize(value);
@@ -727,7 +887,7 @@ export default function PupilsInformationPage() {
       <FormModal
         bodyClassName="px-5 py-5 sm:px-5 sm:py-5"
         columns={3}
-        fields={pupilFields}
+        fields={studentFields}
         fieldClassName="space-y-1"
         footerClassName="border-t border-border bg-card px-5 py-4 sm:px-5"
         gridClassName="grid-cols-1 md:grid-cols-6 xl:grid-cols-12 xl:auto-rows-min"
@@ -737,7 +897,7 @@ export default function PupilsInformationPage() {
         mode={dialogState?.mode ?? "view"}
         onChange={handleFieldChange}
         onClose={closeDialog}
-        onSubmit={dialogState?.mode === "view" ? undefined : handleSavePupil}
+        onSubmit={dialogState?.mode === "view" ? undefined : handleSaveStudent}
         panelClassName="rounded-[6px] border border-border bg-card shadow-[0_14px_38px_rgba(15,23,42,0.14)]"
         size="modal-large"
         submitLabel={
@@ -747,14 +907,14 @@ export default function PupilsInformationPage() {
               : "Creating..."
             : dialogState?.mode === "edit"
               ? "Save Changes"
-              : "Create Pupil"
+              : "Create Student"
         }
         title={
           dialogState?.mode === "view"
-            ? "View Pupil"
+            ? "View Student"
             : dialogState?.mode === "edit"
-              ? "Edit Pupil"
-              : "Add Pupil"
+              ? "Edit Student"
+              : "Add Student"
         }
         titleClassName="text-[17px] font-semibold text-slate-950 sm:text-[18px]"
         values={formValues}
@@ -767,10 +927,10 @@ export default function PupilsInformationPage() {
         emphasisMessage="This action cannot be undone."
         emphasisTone="danger"
         isOpen={Boolean(deleteState)}
-        itemLabel={deleteTargetPupil?.full_name ?? "this pupil"}
+        itemLabel={deleteTargetStudent?.full_name ?? "this student"}
         onClose={closeDeleteDialog}
-        onConfirm={handleDeletePupil}
-        title="Delete Pupil"
+        onConfirm={handleDeleteStudent}
+        title="Delete Student"
       />
     </PagePlaceholder>
   );
