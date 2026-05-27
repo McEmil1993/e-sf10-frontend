@@ -8,6 +8,48 @@ export const mainNavItems: NavItem[] = [
     description: "Overview and summary",
   },
   {
+    label: "Student Information",
+    href: "/students/information",
+    icon: "users",
+    description: "View student information",
+  },
+  {
+    label: "Student Grades",
+    href: "/students/grades",
+    icon: "chart",
+    description: "View student grades",
+  },
+  {
+    label: "Student SF10 Records",
+    href: "/students/sf10-records",
+    icon: "document",
+    description: "View SF10 records",
+  },
+  {
+    label: "Records Search",
+    href: "/records/search",
+    icon: "document",
+    description: "Search records",
+  },
+  {
+    label: "Records Verification",
+    href: "/records/verification",
+    icon: "shield",
+    description: "Verify records",
+  },
+  {
+    label: "Records Archive",
+    href: "/records/archive",
+    icon: "document",
+    description: "Archived records",
+  },
+  {
+    label: "Reports Export / Print",
+    href: "/reports/export-print",
+    icon: "reports",
+    description: "Export or print reports",
+  },
+  {
     label: "Settings",
     icon: "settings",
     description: "System settings",
@@ -16,6 +58,16 @@ export const mainNavItems: NavItem[] = [
         label: "Users",
         href: "/users",
         description: "Manage user access",
+      },
+      {
+        label: "System",
+        href: "/settings/system",
+        description: "Manage school profile and logos",
+      },
+      {
+        label: "Guardians",
+        href: "/guardians",
+        description: "Manage guardian records",
       },
       {
         label: "Roles & Permissions",

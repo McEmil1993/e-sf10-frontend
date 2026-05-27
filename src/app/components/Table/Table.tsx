@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import AuthenticatedImage from "@/app/components/Image/AuthenticatedImage";
 import type { TableActionTone, TableColumn, TableProps } from "@/app/types/tableTypes";
 
 const actionToneClasses: Record<TableActionTone, string> = {
@@ -38,12 +39,20 @@ function renderAvatar<T extends Record<string, unknown>>(row: T, column: TableCo
 
   if (imagePath) {
     return (
-      <img
+      <AuthenticatedImage
         alt={fallbackValue}
-        className={[
-          "h-9 w-9 rounded-full object-cover",
-          column.avatarClassName ?? "",
-        ].join(" ")}
+        className={["h-9 w-9 rounded-full object-cover", column.avatarClassName ?? ""].join(" ")}
+        fallback={
+          <span
+            className={[
+              "inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-700",
+              column.avatarClassName ?? "",
+              column.avatarTextClassName ?? "",
+            ].join(" ")}
+          >
+            {getInitialLetter(fallbackValue)}
+          </span>
+        }
         src={imagePath}
       />
     );

@@ -2,30 +2,32 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { SessionUser } from "@/app/types/authTypes";
 import type { AdminUser } from "@/app/types/userTypes";
-import { getUserByEmail } from "@/app/utils/mockData";
+import {
+  AUTH_COOKIE_NAME,
+  AUTH_COOKIE_MAX_AGE,
+  type AuthSessionCookie,
+  createAuthSession,
+  fetchCurrentUserWithToken,
+  parseAuthSessionCookie,
+  serializeAuthSessionCookie,
+} from "@/app/utils/api";
 
-export const AUTH_COOKIE_NAME = "tmc-itclub-session";
-
-function toSessionUser(user: AdminUser): SessionUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    roles: user.roles,
-    status: user.status,
-    created_at: user.created_at,
-  };
-}
-
-export async function createSession(user: AdminUser) {
+export async function createSession({
+  token,
+  user,
+}: {
+  token: string;
+  user: AdminUser;
+}) {
   const cookieStore = await cookies();
+  const session = createAuthSession(token, user);
 
-  cookieStore.set(AUTH_COOKIE_NAME, JSON.stringify(toSessionUser(user)), {
-    httpOnly: true,
+  cookieStore.set(AUTH_COOKIE_NAME, serializeAuthSessionCookie(session), {
+    httpOnly: false,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: AUTH_COOKIE_MAX_AGE,
   });
 }
 
@@ -34,23 +36,26 @@ export async function clearSession() {
   cookieStore.delete(AUTH_COOKIE_NAME);
 }
 
-export async function getSessionUser(): Promise<SessionUser | null> {
+export async function getSessionData(): Promise<AuthSessionCookie | null> {
   const cookieStore = await cookies();
-  const cookieValue = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+  return parseAuthSessionCookie(cookieStore.get(AUTH_COOKIE_NAME)?.value);
+}
 
-  if (!cookieValue) {
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const session = await getSessionData();
+
+  if (!session) {
     return null;
   }
 
   try {
-    const parsedUser = JSON.parse(cookieValue) as SessionUser;
-    const matchedUser = await getUserByEmail(parsedUser.email);
+    const matchedUser = await fetchCurrentUserWithToken(session.token);
 
-    if (!matchedUser || matchedUser.status !== "active") {
+    if (matchedUser.status !== "active") {
       return null;
     }
 
-    return toSessionUser(matchedUser);
+    return createAuthSession(session.token, matchedUser).user;
   } catch {
     return null;
   }

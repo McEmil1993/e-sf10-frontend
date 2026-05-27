@@ -2,16 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/components/Button/Button";
+import { DeleteIcon, EditIcon, RefreshIcon, ViewIcon } from "@/app/components/Icon/UserActionIcons";
 import ConfirmModal from "@/app/components/Modal/ConfirmModal";
 import FormModal from "@/app/components/Modal/FormModal";
+import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
 import Table from "@/app/components/Table/Table";
+import ToastViewport from "@/app/components/Toast/ToastViewport";
 import rawBarangays from "@/app/data/barangays.json";
 import rawCitiesMunicipalities from "@/app/data/cities-municipalities.json";
 import rawProvinces from "@/app/data/provinces.json";
 import rawRegions from "@/app/data/regions.json";
 import rawSuffixes from "@/app/data/suffixes.json";
-import rawUsers from "@/app/data/users.json";
+import type { AppRole } from "@/app/types/accessControlTypes";
 import type { ModalField } from "@/app/types/components/modalTypes";
+import type { ToastItem } from "@/app/types/components/toastTypes";
 import type {
   UserOption,
   UsersDeleteState,
@@ -19,15 +23,36 @@ import type {
   UsersStatusState,
 } from "@/app/types/components/usersManagerTypes";
 import type { TableColumn } from "@/app/types/tableTypes";
-import type { AdminUser, UserFormValues, UserRole, UserStatus, UserTableRow } from "@/app/types/userTypes";
-import { getRoleTone, getStatusTone } from "@/app/utils/mockData";
+import type { AdminUser, UserFormValues, UserStatus, UserTableRow } from "@/app/types/userTypes";
+import {
+  createUser,
+  deleteUser,
+  getClientAuthSession,
+  listPositions,
+  listRoles,
+  listUsers,
+  updateUser,
+} from "@/app/utils/api";
+import { buildRoleToneMap, getStatusTone } from "@/app/lib/display";
 import { createUsersResponse, normalizeUserRecord, toUserTableRow } from "@/app/utils/usersApi";
 
 function normalizeRoles(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((role) => role.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function formatRoleLabel(value: string) {
   return value
-    .split(",")
-    .map((role) => role.trim().toLowerCase())
-    .filter(Boolean) as UserRole[];
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function buildFullName(values: Pick<UserFormValues, "first_name" | "middle_name" | "last_name" | "suffix">) {
@@ -37,29 +62,15 @@ function buildFullName(values: Pick<UserFormValues, "first_name" | "middle_name"
     .join(" ");
 }
 
-const initialUsers = (rawUsers as AdminUser[]).map(normalizeUserRecord);
-
-const roleToneMap = {
-  admin: getRoleTone("admin"),
-  developer: getRoleTone("admin"),
-  editor: getRoleTone("editor"),
-  staff: getRoleTone("editor"),
-  user: getRoleTone("user"),
-};
+function normalizeContactNumberInput(value: string) {
+  return value.replace(/\D/g, "").slice(0, 11);
+}
 
 const statusToneMap = {
   active: getStatusTone("active"),
   inactive: getStatusTone("inactive"),
-  banned: getStatusTone("banned"),
-};
 
-const roleOptions: UserOption[] = [
-  { label: "Admin", value: "admin" },
-  { label: "Developer", value: "developer" },
-  { label: "Editor", value: "editor" },
-  { label: "Staff", value: "staff" },
-  { label: "User", value: "user" },
-];
+};
 
 const sexOptions: UserOption[] = [
   { label: "Male", value: "male" },
@@ -97,31 +108,54 @@ const regionOptions: UserOption[] = (
 const statusOptions: UserOption[] = [
   { label: "Active", value: "active" },
   { label: "Inactive", value: "inactive" },
-  { label: "Banned", value: "banned" },
 ];
 
 function buildUserFields(
+  roleOptions: UserOption[],
+  positionOptions: UserOption[],
   provinceOptions: UserOption[],
   cityMunicipalityOptions: UserOption[],
   barangayOptions: UserOption[],
 ): ModalField[] {
   return [
   {
+    name: "profile_picture",
+    label: "Profile Picture",
+    type: "file",
+    accept: "image/*",
+    enableImageCrop: true,
+    cropShape: "circle",
+    cropAspect: 1,
+    layoutClassName: "md:col-span-6 xl:col-span-6",
+  },
+  {
+    name: "roles",
+    label: "Role",
+    type: "checkbox-group",
+    options: roleOptions,
+    maxSelections: 3,
+    checkboxStyle: "pill",
+    layoutClassName: "md:col-span-6 xl:col-span-6",
+  },
+  {
     name: "first_name",
     label: "First Name",
     placeholder: "Juan",
     required: true,
+    layoutClassName: "md:col-span-3 xl:col-span-4",
   },
   {
     name: "middle_name",
     label: "Middle Name",
     placeholder: "Santos",
+    layoutClassName: "md:col-span-3 xl:col-span-4",
   },
   {
     name: "last_name",
     label: "Last Name",
     placeholder: "Dela Cruz",
     required: true,
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "suffix",
@@ -129,12 +163,14 @@ function buildUserFields(
     placeholder: "Jr.",
     type: "lookup",
     options: suffixOptions,
+    layoutClassName: "md:col-span-3 xl:col-span-2",
   },
   {
     name: "sex",
     label: "Sex",
     type: "select",
     options: sexOptions,
+    layoutClassName: "md:col-span-3 xl:col-span-2",
   },
   {
     name: "email",
@@ -142,56 +178,36 @@ function buildUserFields(
     type: "email",
     placeholder: "juan@example.com",
     required: true,
-  },
-  {
-    name: "contact_number",
-    label: "Contact Number",
-    placeholder: "09171234567",
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "username",
     label: "Username",
     placeholder: "juan.cruz",
     required: true,
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
-    name: "password",
-    label: "Password",
-    type: "password",
-    placeholder: "Enter password",
-    required: true,
-  },
-  {
-    name: "confirm_password",
-    label: "Confirm Password",
-    type: "password",
-    placeholder: "Confirm password",
-    required: true,
-  },
-  {
-    name: "roles",
-    label: "Role",
-    type: "checkbox-group",
-    options: roleOptions,
-    maxSelections: 2,
-    colSpan: 2,
+    name: "contact_number",
+    label: "Contact Number",
+    placeholder: "09171234567",
+    helperText: "Enter 10 to 11 digits only.",
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "position",
     label: "Position",
+    type: "lookup",
+    options: positionOptions,
     placeholder: "Teacher I",
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "status",
     label: "Status",
     type: "select",
     options: statusOptions,
-  },
-  {
-    name: "profile_picture",
-    label: "Profile Picture",
-    placeholder: "http://localhost/encript_token/profile.png",
-    colSpan: 2,
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "region",
@@ -199,6 +215,7 @@ function buildUserFields(
     type: "lookup",
     options: regionOptions,
     placeholder: "Region VII",
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "province",
@@ -206,6 +223,7 @@ function buildUserFields(
     type: "lookup",
     options: provinceOptions,
     placeholder: "Cebu",
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "municipality_city",
@@ -213,6 +231,7 @@ function buildUserFields(
     type: "lookup",
     options: cityMunicipalityOptions,
     placeholder: "Talisay City",
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "barangay",
@@ -220,12 +239,13 @@ function buildUserFields(
     type: "lookup",
     options: barangayOptions,
     placeholder: "San Isidro",
+    layoutClassName: "md:col-span-6 xl:col-span-4",
   },
   {
     name: "address",
     label: "Address",
     placeholder: "Street and house details",
-    colSpan: 2,
+    layoutClassName: "md:col-span-6 xl:col-span-8",
   },
   ];
 }
@@ -244,44 +264,62 @@ const emptyFormValues: UserFormValues = {
   province: "Bohol",
   region: "Region VII",
   username: "",
-  password: "",
-  confirm_password: "",
   roles: "user",
   position: "",
   status: "active",
   profile_picture: "",
 };
 
-function ViewIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 5c5.5 0 9.27 5.11 9.43 5.33l.57.8-.57.8C21.27 12.15 17.5 17.27 12 17.27S2.73 12.15 2.57 11.93L2 11.13l.57-.8C2.73 10.11 6.5 5 12 5Zm0 2c-3.62 0-6.54 2.96-7.31 4.13.77 1.17 3.69 4.14 7.31 4.14s6.54-2.97 7.31-4.14C18.54 9.96 15.62 7 12 7Zm0 1.5A2.63 2.63 0 1 1 9.38 11 2.63 2.63 0 0 1 12 8.5Z" fill="currentColor" />
-    </svg>
-  );
+function createToastId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function EditIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="m4 15.75 9.81-9.81 4.25 4.25L8.25 20H4v-4.25Zm12.95-10.7a1.5 1.5 0 0 1 2.12 0l.88.88a1.5 1.5 0 0 1 0 2.12l-.83.83-4.25-4.25.83-.83Z" fill="currentColor" />
-    </svg>
-  );
+function getRandomIndex(maxValue: number) {
+  if (maxValue <= 0) {
+    return 0;
+  }
+
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    const array = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(array);
+    return array[0] % maxValue;
+  }
+
+  return Math.floor(Math.random() * maxValue);
 }
 
-function DeleteIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v8h-2V9Zm4 0h2v8h-2V9ZM6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Z" fill="currentColor" />
-    </svg>
-  );
+function pickRandomCharacter(characters: string) {
+  return characters.charAt(getRandomIndex(characters.length));
 }
 
-function RefreshIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-      <path d="M12 5a7 7 0 0 1 6.05 3.48V6H20v6h-6V10h2.56A5 5 0 1 0 17 15h2a7 7 0 1 1-7-10Z" fill="currentColor" />
-    </svg>
-  );
+function generateTemporaryPassword() {
+  const uppercaseCharacters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lowercaseCharacters = "abcdefghijkmnopqrstuvwxyz";
+  const numberCharacters = "23456789";
+  const symbolCharacters = "!@#$%^&*";
+  const allCharacters =
+    `${uppercaseCharacters}${lowercaseCharacters}${numberCharacters}${symbolCharacters}`;
+
+  const passwordCharacters = [
+    pickRandomCharacter(uppercaseCharacters),
+    pickRandomCharacter(lowercaseCharacters),
+    pickRandomCharacter(numberCharacters),
+    pickRandomCharacter(symbolCharacters),
+    ...Array.from({ length: 8 }, () => pickRandomCharacter(allCharacters)),
+  ];
+
+  for (let currentIndex = passwordCharacters.length - 1; currentIndex > 0; currentIndex -= 1) {
+    const randomIndex = getRandomIndex(currentIndex + 1);
+    const currentCharacter = passwordCharacters[currentIndex];
+    passwordCharacters[currentIndex] = passwordCharacters[randomIndex];
+    passwordCharacters[randomIndex] = currentCharacter;
+  }
+
+  return passwordCharacters.join("");
 }
 
 function getNextStatus(status: UserTableRow["status"]): UserStatus {
@@ -289,9 +327,7 @@ function getNextStatus(status: UserTableRow["status"]): UserStatus {
     return "inactive";
   }
 
-  if (status === "inactive") {
-    return "banned";
-  }
+
 
   return "active";
 }
@@ -315,8 +351,6 @@ function normalizeFormValues(user: AdminUser | null): UserFormValues {
     province: user.province ?? "",
     region: user.region ?? "",
     username: user.username ?? "",
-    password: user.password ?? "",
-    confirm_password: user.password ?? "",
     roles: user.roles.join(","),
     position: user.position ?? "",
     status: user.status,
@@ -325,7 +359,9 @@ function normalizeFormValues(user: AdminUser | null): UserFormValues {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState(initialUsers);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<AppRole[]>([]);
+  const [positionOptions, setPositionOptions] = useState<UserOption[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -333,6 +369,9 @@ export default function UsersPage() {
   const [deleteState, setDeleteState] = useState<UsersDeleteState | null>(null);
   const [statusState, setStatusState] = useState<UsersStatusState | null>(null);
   const [formValues, setFormValues] = useState<UserFormValues>(emptyFormValues);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const usersResponse = useMemo(
     () =>
@@ -342,16 +381,65 @@ export default function UsersPage() {
         search: searchTerm,
         sortBy: "created_at",
         sortOrder: "desc",
-        basePath: "/api/users",
+        basePath: "/users",
       }),
     [currentPage, pageSize, searchTerm, users],
   );
 
   useEffect(() => {
-    if (currentPage !== usersResponse.meta.page) {
-      setCurrentPage(usersResponse.meta.page);
+    let isMounted = true;
+
+    async function loadUsers() {
+      try {
+        setIsLoading(true);
+        const currentSessionUserId = getClientAuthSession()?.user.id ?? null;
+        const [userData, roleData, positionData] = await Promise.all([
+          listUsers(),
+          listRoles(),
+          listPositions(),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUsers(
+          userData
+            .filter((user) => (currentSessionUserId ? user.id !== currentSessionUserId : true))
+            .map(normalizeUserRecord),
+        );
+        setAvailableRoles(roleData);
+        setPositionOptions(
+          positionData
+            .map((position) => ({
+              label: `${position.fullPosition} (${position.acronym}) - ${position.category}`,
+              value: position.fullPosition,
+            }))
+            .sort((firstOption, secondOption) => firstOption.value.localeCompare(secondOption.value)),
+        );
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        showToast({
+          tone: "error",
+          title: "Unable to load users.",
+          description: error instanceof Error ? error.message : "Please try again in a moment.",
+        });
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
     }
-  }, [currentPage, usersResponse.meta.page]);
+
+    void loadUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const selectedRegion = useMemo(
     () => regions.find((region) => region.regionName === formValues.region || region.name === formValues.region) ?? null,
@@ -416,16 +504,59 @@ export default function UsersPage() {
         .map((barangay) => ({
           label: barangay.name,
           value: barangay.name,
-        })),
+      })),
     [selectedCityMunicipality],
   );
 
-  const userFields = useMemo(
-    () => buildUserFields(provinceOptions, cityMunicipalityOptions, barangayOptions),
-    [barangayOptions, cityMunicipalityOptions, provinceOptions],
+  const roleOptions = useMemo(() => {
+    const roleValues = new Set<string>();
+
+    availableRoles.forEach((role) => {
+      const normalizedValue = role.name.trim().toLowerCase();
+
+      if (normalizedValue) {
+        roleValues.add(normalizedValue);
+      }
+    });
+
+    users.forEach((user) => {
+      user.roles.forEach((role) => {
+        const normalizedValue = role.trim().toLowerCase();
+
+        if (normalizedValue) {
+          roleValues.add(normalizedValue);
+        }
+      });
+    });
+
+    return Array.from(roleValues)
+      .sort((firstValue, secondValue) => firstValue.localeCompare(secondValue))
+      .map((role) => ({
+        label: formatRoleLabel(role),
+        value: role,
+      }));
+  }, [availableRoles, users]);
+
+  const defaultRoleValue = roleOptions[0]?.value ?? "user";
+
+  const roleToneMap = useMemo(
+    () => buildRoleToneMap([...roleOptions.map((role) => role.value), ...users.flatMap((user) => user.roles)]),
+    [roleOptions, users],
   );
 
-  const deleteUser = useMemo(
+  const userFields = useMemo(
+    () =>
+      buildUserFields(
+        roleOptions,
+        positionOptions,
+        provinceOptions,
+        cityMunicipalityOptions,
+        barangayOptions,
+      ),
+    [barangayOptions, cityMunicipalityOptions, positionOptions, provinceOptions, roleOptions],
+  );
+
+  const deleteTargetUser = useMemo(
     () => users.find((user) => user.id === deleteState?.userId) ?? null,
     [deleteState?.userId, users],
   );
@@ -440,8 +571,35 @@ export default function UsersPage() {
     [usersResponse.data],
   );
 
+  function showToast({
+    description,
+    duration,
+    title,
+    tone = "info",
+  }: Omit<ToastItem, "id">) {
+    setToasts((currentValue) => [
+      ...currentValue.slice(-2),
+      {
+        id: createToastId(),
+        title,
+        description,
+        tone,
+        duration,
+      },
+    ]);
+  }
+
+  function dismissToast(toastId: string) {
+    setToasts((currentValue) =>
+      currentValue.filter((toast) => toast.id !== toastId),
+    );
+  }
+
   function openAddModal() {
-    setFormValues(emptyFormValues);
+    setFormValues({
+      ...emptyFormValues,
+      roles: defaultRoleValue,
+    });
     setDialogState({
       mode: "add",
       userId: null,
@@ -488,6 +646,14 @@ export default function UsersPage() {
   }
 
   function handleFieldChange(name: string, value: string) {
+    if (name === "contact_number") {
+      setFormValues((currentValue) => ({
+        ...currentValue,
+        contact_number: normalizeContactNumberInput(value),
+      }));
+      return;
+    }
+
     if (name === "region") {
       setFormValues((currentValue) => ({
         ...currentValue,
@@ -524,7 +690,7 @@ export default function UsersPage() {
     }));
   }
 
-  function buildUserPayload(existingUser?: AdminUser) {
+  function buildUserPayload(existingUser?: AdminUser, temporaryPassword?: string) {
     const selectedRoles = normalizeRoles(formValues.roles);
 
     return {
@@ -543,7 +709,7 @@ export default function UsersPage() {
       province: formValues.province.trim(),
       region: formValues.region.trim(),
       username: formValues.username.trim(),
-      password: formValues.password,
+      ...(temporaryPassword ? { password: temporaryPassword } : {}),
       avatar: formValues.profile_picture.trim(),
       profile_picture: formValues.profile_picture.trim(),
       roles: selectedRoles,
@@ -552,67 +718,145 @@ export default function UsersPage() {
     };
   }
 
-  function handleSaveUser() {
+  async function handleSaveUser() {
     if (!dialogState) {
       return;
     }
 
-    if (dialogState.mode === "add") {
-      const nextId = users.reduce((maxId, user) => Math.max(maxId, user.id), 0) + 1;
-      setUsers((currentUsers) => [
-        ...currentUsers,
-        {
-          id: nextId,
-          ...buildUserPayload(),
-          created_at: new Date().toISOString(),
-        },
-      ]);
-      setCurrentPage(1);
-      closeDialog();
+    const normalizedContactNumber = normalizeContactNumberInput(formValues.contact_number);
+
+    if (normalizedContactNumber && !/^\d{10,11}$/.test(normalizedContactNumber)) {
+      showToast({
+        tone: "error",
+        title: "Invalid contact number.",
+        description: "Contact number must be 10 to 11 digits only.",
+      });
       return;
     }
 
-    if (dialogState.mode === "edit" && dialogState.userId !== null) {
-      setUsers((currentUsers) =>
-        currentUsers.map((user) =>
-          user.id === dialogState.userId
-            ? {
-                ...buildUserPayload(user),
-                id: user.id,
-                created_at: user.created_at,
-              }
-            : user,
-        ),
-      );
-      closeDialog();
+    try {
+      setIsSubmitting(true);
+
+      if (dialogState.mode === "add") {
+        const temporaryPassword = generateTemporaryPassword();
+        const createdUser = await createUser(
+          buildUserPayload(undefined, temporaryPassword),
+        );
+
+        setUsers((currentUsers) => [normalizeUserRecord(createdUser), ...currentUsers]);
+        setCurrentPage(1);
+        closeDialog();
+        showToast({
+          tone: "success",
+          title: "User created successfully.",
+          description: (
+            <span>
+              Temporary password:{" "}
+              <span className="font-mono font-semibold text-slate-900">
+                {temporaryPassword}
+              </span>
+            </span>
+          ),
+          duration: 10000,
+        });
+        return;
+      }
+
+      if (dialogState.mode === "edit" && dialogState.userId !== null) {
+        const user = users.find((item) => item.id === dialogState.userId);
+        const updatedUser = await updateUser(dialogState.userId, buildUserPayload(user));
+
+        setUsers((currentUsers) =>
+          currentUsers.map((currentUser) =>
+            currentUser.id === dialogState.userId
+              ? normalizeUserRecord(updatedUser)
+              : currentUser,
+          ),
+        );
+        closeDialog();
+        showToast({
+          tone: "success",
+          title: "User updated successfully.",
+        });
+      }
+    } catch (error) {
+      showToast({
+        tone: "error",
+        title: "Unable to save the user.",
+        description: error instanceof Error ? error.message : "Please try again in a moment.",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
-  function handleDeleteUser() {
+  async function handleDeleteUser() {
     if (!deleteState?.userId) {
       return;
     }
 
-    setUsers((currentUsers) => currentUsers.filter((user) => user.id !== deleteState.userId));
-    closeDeleteDialog();
+    try {
+      setIsSubmitting(true);
+      await deleteUser(deleteState.userId);
+      setUsers((currentUsers) => currentUsers.filter((user) => user.id !== deleteState.userId));
+      closeDeleteDialog();
+      showToast({
+        tone: "success",
+        title: "User deleted successfully.",
+        description: deleteTargetUser?.name
+          ? `${deleteTargetUser.name} was removed from the list.`
+          : undefined,
+      });
+    } catch (error) {
+      showToast({
+        tone: "error",
+        title: "Unable to delete the user.",
+        description: error instanceof Error ? error.message : "Please try again in a moment.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleUpdateStatus() {
+  async function handleUpdateStatus() {
     if (!statusState?.userId) {
       return;
     }
 
-    setUsers((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === statusState.userId
-          ? {
-              ...user,
-              status: getNextStatus(user.status),
-            }
-          : user,
-      ),
-    );
-    closeStatusDialog();
+    const user = users.find((item) => item.id === statusState.userId);
+
+    if (!user) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const updatedUser = await updateUser(statusState.userId, {
+        status: getNextStatus(user.status),
+      });
+
+      setUsers((currentUsers) =>
+        currentUsers.map((currentUser) =>
+          currentUser.id === statusState.userId
+            ? normalizeUserRecord(updatedUser)
+            : currentUser,
+        ),
+      );
+      closeStatusDialog();
+      showToast({
+        tone: "success",
+        title: "User status updated.",
+        description: `${user.name} is now ${getNextStatus(user.status)}.`,
+      });
+    } catch (error) {
+      showToast({
+        tone: "error",
+        title: "Unable to update user status.",
+        description: error instanceof Error ? error.message : "Please try again in a moment.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const columns: TableColumn<UserTableRow>[] = [
@@ -628,8 +872,8 @@ export default function UsersPage() {
       secondaryValueClassName: "text-xs text-muted",
     },
     {
-      key: "username",
-      header: "Username",
+      key: "email",
+      header: "Email",
       valueClassName: "text-sm font-medium text-slate-700",
     },
     {
@@ -643,6 +887,10 @@ export default function UsersPage() {
       type: "badge",
       badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold",
       toneMap: roleToneMap,
+    },{
+      key: "position",
+      header: "Position",
+      valueClassName: "text-sm text-slate-700",
     },
     {
       key: "status",
@@ -653,7 +901,7 @@ export default function UsersPage() {
     },
     {
       key: "created_at",
-      header: "Created At",
+      header: "Join Date",
       valueClassName: "text-sm text-slate-600",
     },
     {
@@ -691,23 +939,19 @@ export default function UsersPage() {
   ];
 
   return (
-    <div className="space-y-4">
-      <section className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-[32px] font-light text-slate-900">Users</h1>
-        </div>
-        <div className="text-sm text-muted">Home &gt; Users</div>
-      </section>
+    <PagePlaceholder breadcrumb="Home > Users" title="Users">
+      <ToastViewport onDismiss={dismissToast} toasts={toasts} />
 
       <div className="space-y-3">
         <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
-          <Button onClick={openAddModal} size="sm">
+          <Button disabled={isSubmitting} onClick={openAddModal} size="sm">
             Add User
           </Button>
         </div>
         <Table
           columns={columns}
           data={tableUsers}
+          emptyMessage={isLoading ? "Loading users..." : "No users found."}
           pagination={{
             page: usersResponse.meta.page,
             perPage: usersResponse.meta.per_page,
@@ -731,15 +975,30 @@ export default function UsersPage() {
       </div>
 
       <FormModal
+        bodyClassName="px-5 py-5 sm:px-5 sm:py-5"
         columns={3}
         fields={userFields}
+        fieldClassName="space-y-1"
+        footerClassName="border-t border-border bg-card px-5 py-4 sm:px-5"
+        gridClassName="grid-cols-1 md:grid-cols-6 xl:grid-cols-12 xl:auto-rows-min"
+        headerClassName="border-b border-border px-5 py-3.5 sm:px-5"
         isOpen={Boolean(dialogState)}
+        labelClassName="text-[13px] font-semibold text-slate-700"
         mode={dialogState?.mode ?? "view"}
         onChange={handleFieldChange}
         onClose={closeDialog}
         onSubmit={dialogState?.mode === "view" ? undefined : handleSaveUser}
+        panelClassName="rounded-[6px] border border-border bg-card shadow-[0_14px_38px_rgba(15,23,42,0.14)]"
         size="modal-large"
-        submitLabel={dialogState?.mode === "edit" ? "Save Changes" : "Create User"}
+        submitLabel={
+          isSubmitting
+            ? dialogState?.mode === "edit"
+              ? "Saving..."
+              : "Creating..."
+            : dialogState?.mode === "edit"
+              ? "Save Changes"
+              : "Create User"
+        }
         title={
           dialogState?.mode === "view"
             ? "View User"
@@ -747,6 +1006,7 @@ export default function UsersPage() {
               ? "Edit User"
               : "Add User"
         }
+        titleClassName="text-[17px] font-semibold text-slate-950 sm:text-[18px]"
         values={formValues}
       />
 
@@ -757,7 +1017,7 @@ export default function UsersPage() {
         emphasisMessage="This action cannot be undone."
         emphasisTone="danger"
         isOpen={Boolean(deleteState)}
-        itemLabel={deleteUser?.name ?? "this user"}
+        itemLabel={deleteTargetUser?.name ?? "this user"}
         onClose={closeDeleteDialog}
         onConfirm={handleDeleteUser}
         title="Delete User"
@@ -779,6 +1039,6 @@ export default function UsersPage() {
         onConfirm={handleUpdateStatus}
         title="Update Status"
       />
-    </div>
+    </PagePlaceholder>
   );
 }

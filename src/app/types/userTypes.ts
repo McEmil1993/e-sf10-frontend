@@ -1,5 +1,5 @@
-export type UserRole = "admin" | "user" | "editor" | "staff" | "developer";
-export type UserStatus = "active" | "inactive" | "banned";
+export type UserRole = string;
+export type UserStatus = "active" | "inactive";
 export type UserSex = "male" | "female";
 
 export type AdminUser = {
@@ -25,6 +25,8 @@ export type AdminUser = {
   position?: string;
   status: UserStatus;
   created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
 };
 
 export type UserTableRow = {
@@ -33,10 +35,12 @@ export type UserTableRow = {
   email: string;
   avatar?: string;
   role: string;
+  position?: string;
   status: string;
   username?: string;
   contact_number?: string;
   created_at: string;
+  updated_at?: string;
 };
 
 export type UsersSortField =
@@ -101,10 +105,14 @@ export type UserFormValues = {
   province: string;
   region: string;
   username: string;
-  password: string;
-  confirm_password: string;
   roles: string;
   position: string;
   status: string;
   profile_picture: string;
 };
+
+export type ChangePasswordPayload = {
+  currentPassword: string;
+  newPassword: string;
+};
+

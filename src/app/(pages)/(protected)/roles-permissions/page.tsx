@@ -1,18 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/components/Button/Button";
 import AppIcon from "@/app/components/Icon/AppIcon";
 import ConfirmModal from "@/app/components/Modal/ConfirmModal";
 import FormModal from "@/app/components/Modal/FormModal";
+import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
 import PermissionModuleCard from "@/app/components/PermissionModuleCard/PermissionModuleCard";
 import RoleCard from "@/app/components/RoleCard/RoleCard";
 import { moduleIconOptions } from "@/app/config/iconOptions";
-import rawModules from "@/app/data/modules.json";
-import rawPermissions from "@/app/data/permissions.json";
-import rawRolePermissions from "@/app/data/role_permissions.json";
-import rawRoles from "@/app/data/roles.json";
-import rawUserRoles from "@/app/data/user_roles.json";
 import type {
   AppModule,
   AppPermission,
@@ -20,17 +16,29 @@ import type {
   ModuleFormValues,
   PermissionFormValues,
   RoleFormValues,
-  RolePermissionAssignment,
-  UserRoleAssignment,
 } from "@/app/types/accessControlTypes";
 import type { ModalField } from "@/app/types/components/modalTypes";
-import type {
-  DataTab,
-  DeleteState,
-  ModuleDialogState,
-  PermissionDialogState,
-  RoleDialogState,
-} from "@/app/types/rolesPermissionsTypes";
+import type { DataTab, DeleteState, ModuleDialogState, PermissionDialogState, RoleDialogState } from "@/app/types/rolesPermissionsTypes";
+import type { AdminUser } from "@/app/types/userTypes";
+import {
+  createModule,
+  createPermission,
+  createRole,
+  deleteModule,
+  deletePermission,
+  deleteRole,
+  getRolePermissions,
+  listModules,
+  listPermissions,
+  listRoles,
+  listUsers,
+  replaceRolePermissions,
+  updateModule,
+  updatePermission,
+  updateRole,
+} from "@/app/utils/api";
+
+type RolePermissionMap = Record<number, number[]>;
 
 const emptyRoleFormValues: RoleFormValues = {
   name: "",
@@ -48,14 +56,6 @@ const emptyPermissionFormValues: PermissionFormValues = {
   name: "",
   slug: "",
   description: "",
-};
-
-const accessControlData = {
-  roles: rawRoles as AppRole[],
-  modules: rawModules as AppModule[],
-  permissions: rawPermissions as AppPermission[],
-  userRoles: rawUserRoles as UserRoleAssignment[],
-  rolePermissions: rawRolePermissions as RolePermissionAssignment[],
 };
 
 function PlusIcon() {
@@ -96,15 +96,39 @@ function buildModuleSlug(moduleName: string) {
     .replace(/^_+|_+$/g, "");
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong.";
+}
+
+function buildRolePermissionMap(entries: Array<readonly [number, number[]]>): RolePermissionMap {
+  return entries.reduce<RolePermissionMap>((result, [roleId, permissionIds]) => {
+    result[roleId] = Array.from(new Set(permissionIds));
+    return result;
+  }, {});
+}
+
+function removePermissionIdsFromRoleMap(
+  currentValue: RolePermissionMap,
+  permissionIds: number[],
+) {
+  const removedIds = new Set(permissionIds);
+
+  return Object.keys(currentValue).reduce<RolePermissionMap>((result, roleId) => {
+    const parsedRoleId = Number(roleId);
+    result[parsedRoleId] = currentValue[parsedRoleId].filter(
+      (permissionId) => !removedIds.has(permissionId),
+    );
+    return result;
+  }, {});
+}
+
 export default function RolesPermissionsPage() {
-  const [roles, setRoles] = useState(accessControlData.roles);
-  const [modules, setModules] = useState(accessControlData.modules);
-  const [permissions, setPermissions] = useState(accessControlData.permissions);
-  const [rolePermissions, setRolePermissions] = useState(accessControlData.rolePermissions);
-  const [userRoles, setUserRoles] = useState(accessControlData.userRoles);
-  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(
-    accessControlData.roles[0]?.id ?? null,
-  );
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [modules, setModules] = useState<AppModule[]>([]);
+  const [permissions, setPermissions] = useState<AppPermission[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [rolePermissionIdsByRole, setRolePermissionIdsByRole] = useState<RolePermissionMap>({});
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<DataTab>("permissions");
   const [expandedModuleIds, setExpandedModuleIds] = useState<number[]>([]);
   const [roleDialogState, setRoleDialogState] = useState<RoleDialogState | null>(null);
@@ -113,10 +137,71 @@ export default function RolesPermissionsPage() {
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [roleFormValues, setRoleFormValues] = useState<RoleFormValues>(emptyRoleFormValues);
   const [moduleFormValues, setModuleFormValues] = useState<ModuleFormValues>(emptyModuleFormValues);
-  const [permissionFormValues, setPermissionFormValues] = useState<PermissionFormValues>({
-    ...emptyPermissionFormValues,
-    module_id: String(accessControlData.modules[0]?.id ?? ""),
-  });
+  const [permissionFormValues, setPermissionFormValues] = useState<PermissionFormValues>(
+    emptyPermissionFormValues,
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAccessControlData() {
+      try {
+        setIsLoading(true);
+        setErrorMessage(null);
+
+        const [roleData, moduleData, permissionData, userData] = await Promise.all([
+          listRoles(),
+          listModules(),
+          listPermissions(),
+          listUsers(),
+        ]);
+
+        const rolePermissionEntries = await Promise.all(
+          roleData.map(async (role) => {
+            const assignedPermissions = await getRolePermissions(role.id);
+
+            return [role.id, assignedPermissions.map((permission) => permission.id)] as const;
+          }),
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setRoles(roleData);
+        setModules(moduleData);
+        setPermissions(permissionData);
+        setUsers(userData);
+        setRolePermissionIdsByRole(buildRolePermissionMap(rolePermissionEntries));
+        setPermissionFormValues({
+          ...emptyPermissionFormValues,
+          module_id: String(moduleData[0]?.id ?? ""),
+        });
+        setSelectedRoleId((currentValue) =>
+          currentValue && roleData.some((role) => role.id === currentValue)
+            ? currentValue
+            : roleData[0]?.id ?? null,
+        );
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(getErrorMessage(error));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadAccessControlData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const selectedRole = useMemo(
     () => roles.find((role) => role.id === selectedRoleId) ?? null,
@@ -124,32 +209,37 @@ export default function RolesPermissionsPage() {
   );
 
   const rolePermissionIds = useMemo(
-    () =>
-      new Set(
-        rolePermissions
-          .filter((item) => item.role_id === selectedRoleId)
-          .map((item) => item.permission_id),
-      ),
-    [rolePermissions, selectedRoleId],
+    () => new Set(rolePermissionIdsByRole[selectedRoleId ?? -1] ?? []),
+    [rolePermissionIdsByRole, selectedRoleId],
   );
 
   const permissionCountByRole = useMemo(
     () =>
-      rolePermissions.reduce<Record<number, number>>((result, item) => {
-        result[item.role_id] = (result[item.role_id] ?? 0) + 1;
+      Object.keys(rolePermissionIdsByRole).reduce<Record<number, number>>((result, roleId) => {
+        const parsedRoleId = Number(roleId);
+        result[parsedRoleId] = rolePermissionIdsByRole[parsedRoleId]?.length ?? 0;
         return result;
       }, {}),
-    [rolePermissions],
+    [rolePermissionIdsByRole],
   );
 
-  const userCountByRole = useMemo(
-    () =>
-      userRoles.reduce<Record<number, number>>((result, item) => {
-        result[item.role_id] = (result[item.role_id] ?? 0) + 1;
-        return result;
-      }, {}),
-    [userRoles],
-  );
+  const userCountByRole = useMemo(() => {
+    const roleIdByName = new Map(roles.map((role) => [role.name.toLowerCase(), role.id]));
+
+    return users.reduce<Record<number, number>>((result, user) => {
+      user.roles.forEach((roleName) => {
+        const roleId = roleIdByName.get(roleName.toLowerCase());
+
+        if (!roleId) {
+          return;
+        }
+
+        result[roleId] = (result[roleId] ?? 0) + 1;
+      });
+
+      return result;
+    }, {});
+  }, [roles, users]);
 
   const modulePermissions = useMemo(
     () =>
@@ -264,6 +354,7 @@ export default function RolesPermissionsPage() {
   }
 
   function openRoleModal() {
+    setErrorMessage(null);
     setRoleFormValues(emptyRoleFormValues);
     setRoleDialogState({ mode: "add", roleId: null });
   }
@@ -275,6 +366,7 @@ export default function RolesPermissionsPage() {
       return;
     }
 
+    setErrorMessage(null);
     setRoleFormValues({
       name: role.name,
       description: role.description,
@@ -283,26 +375,29 @@ export default function RolesPermissionsPage() {
   }
 
   function openModuleModal() {
+    setErrorMessage(null);
     setModuleFormValues(emptyModuleFormValues);
     setModuleDialogState({ mode: "add", moduleId: null });
   }
 
   function openEditModuleModal(moduleId: number) {
-    const module = modules.find((item) => item.id === moduleId);
+    const selectedModule = modules.find((item) => item.id === moduleId);
 
-    if (!module) {
+    if (!selectedModule) {
       return;
     }
 
+    setErrorMessage(null);
     setModuleFormValues({
-      name: module.name,
-      slug: module.slug,
-      icon: module.icon,
+      name: selectedModule.name,
+      slug: selectedModule.slug,
+      icon: selectedModule.icon,
     });
     setModuleDialogState({ mode: "edit", moduleId });
   }
 
   function openPermissionModal(moduleId?: number) {
+    setErrorMessage(null);
     setPermissionFormValues({
       ...emptyPermissionFormValues,
       module_id: String(moduleId ?? modules[0]?.id ?? ""),
@@ -317,6 +412,7 @@ export default function RolesPermissionsPage() {
       return;
     }
 
+    setErrorMessage(null);
     setPermissionFormValues({
       module_id: String(permission.module_id),
       name: permission.name,
@@ -349,6 +445,7 @@ export default function RolesPermissionsPage() {
   }
 
   function openDeleteDialog(entity: DeleteState["entity"], id: number, label: string) {
+    setErrorMessage(null);
     setDeleteState({ entity, id, label });
   }
 
@@ -356,119 +453,162 @@ export default function RolesPermissionsPage() {
     setDeleteState(null);
   }
 
-  function handleSaveRole() {
-    if (roleDialogState?.mode === "edit" && roleDialogState.roleId !== null) {
-      setRoles((currentValue) =>
-        currentValue.map((role) =>
-          role.id === roleDialogState.roleId
-            ? {
-                ...role,
-                name: roleFormValues.name.trim().toLowerCase(),
-                description: roleFormValues.description.trim(),
-                updated_at: new Date().toISOString(),
-              }
-            : role,
-        ),
-      );
+  async function handleSaveRole() {
+    try {
+      setIsSaving(true);
+      setErrorMessage(null);
+
+      if (roleDialogState?.mode === "edit" && roleDialogState.roleId !== null) {
+        const updatedRole = await updateRole(roleDialogState.roleId, {
+          name: roleFormValues.name.trim().toLowerCase(),
+          description: roleFormValues.description.trim(),
+        });
+
+        setRoles((currentValue) =>
+          currentValue.map((role) =>
+            role.id === roleDialogState.roleId ? updatedRole : role,
+          ),
+        );
+        closeRoleModal();
+        return;
+      }
+
+      const createdRole = await createRole({
+        name: roleFormValues.name.trim().toLowerCase(),
+        description: roleFormValues.description.trim(),
+      });
+
+      setRoles((currentValue) => [...currentValue, createdRole]);
+      setRolePermissionIdsByRole((currentValue) => ({
+        ...currentValue,
+        [createdRole.id]: [],
+      }));
+      setSelectedRoleId(createdRole.id);
       closeRoleModal();
-      return;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
     }
-
-    const nextId = roles.reduce((maxId, role) => Math.max(maxId, role.id), 0) + 1;
-    const nextRole: AppRole = {
-      id: nextId,
-      name: roleFormValues.name.trim().toLowerCase(),
-      description: roleFormValues.description.trim(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    setRoles((currentValue) => [...currentValue, nextRole]);
-    setSelectedRoleId(nextId);
-    closeRoleModal();
   }
 
-  function handleSaveModule() {
-    if (moduleDialogState?.mode === "edit" && moduleDialogState.moduleId !== null) {
-      setModules((currentValue) =>
-        currentValue.map((module) =>
-          module.id === moduleDialogState.moduleId
-            ? {
-                ...module,
-                name: moduleFormValues.name.trim(),
-                slug: moduleFormValues.slug.trim() || buildModuleSlug(moduleFormValues.name),
-                icon: moduleFormValues.icon,
-                updated_at: new Date().toISOString(),
-              }
-            : module,
-        ),
-      );
-      closeModuleModal();
-      return;
-    }
-
-    const nextId = modules.reduce((maxId, module) => Math.max(maxId, module.id), 0) + 1;
-    const nextModule: AppModule = {
-      id: nextId,
+  async function handleSaveModule() {
+    const payload = {
       name: moduleFormValues.name.trim(),
       slug: moduleFormValues.slug.trim() || buildModuleSlug(moduleFormValues.name),
       icon: moduleFormValues.icon,
-      sort_order: modules.length + 1,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
-    setModules((currentValue) => [...currentValue, nextModule]);
-    closeModuleModal();
+    try {
+      setIsSaving(true);
+      setErrorMessage(null);
+
+      if (moduleDialogState?.mode === "edit" && moduleDialogState.moduleId !== null) {
+        const updatedModule = await updateModule(
+          moduleDialogState.moduleId,
+          payload,
+          modules.find((module) => module.id === moduleDialogState.moduleId)?.sort_order ?? 0,
+        );
+
+        setModules((currentValue) =>
+          currentValue.map((module) =>
+            module.id === moduleDialogState.moduleId ? updatedModule : module,
+          ),
+        );
+        closeModuleModal();
+        return;
+      }
+
+      const createdModule = await createModule(payload, modules.length);
+
+      setModules((currentValue) => [...currentValue, createdModule]);
+      closeModuleModal();
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function handleSavePermission() {
+  async function handleSavePermission() {
     const moduleId = Number(permissionFormValues.module_id);
     const selectedModule = modules.find((module) => module.id === moduleId);
 
     if (!selectedModule) {
+      setErrorMessage("Please select a valid module.");
       return;
     }
 
-    if (permissionDialogState?.mode === "edit" && permissionDialogState.permissionId !== null) {
-      setPermissions((currentValue) =>
-        currentValue.map((permission) =>
-          permission.id === permissionDialogState.permissionId
-            ? {
-                ...permission,
-                module_id: moduleId,
-                name: permissionFormValues.name.trim(),
-                slug:
-                  permissionFormValues.slug.trim() ||
-                  buildPermissionSlug(selectedModule.slug, permissionFormValues.name),
-                description: permissionFormValues.description.trim(),
-                updated_at: new Date().toISOString(),
-              }
-            : permission,
-        ),
-      );
-      closePermissionModal();
-      return;
-    }
-
-    const nextId = permissions.reduce((maxId, permission) => Math.max(maxId, permission.id), 0) + 1;
-    const nextPermission: AppPermission = {
-      id: nextId,
-      module_id: moduleId,
+    const payload = {
+      module_id: String(moduleId),
       name: permissionFormValues.name.trim(),
       slug:
         permissionFormValues.slug.trim() ||
         buildPermissionSlug(selectedModule.slug, permissionFormValues.name),
       description: permissionFormValues.description.trim(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
-    setPermissions((currentValue) => [...currentValue, nextPermission]);
-    setExpandedModuleIds((currentValue) =>
-      currentValue.includes(moduleId) ? currentValue : [...currentValue, moduleId],
-    );
-    closePermissionModal();
+    try {
+      setIsSaving(true);
+      setErrorMessage(null);
+
+      if (
+        permissionDialogState?.mode === "edit" &&
+        permissionDialogState.permissionId !== null
+      ) {
+        const updatedPermission = await updatePermission(
+          permissionDialogState.permissionId,
+          payload,
+        );
+
+        setPermissions((currentValue) =>
+          currentValue.map((permission) =>
+            permission.id === permissionDialogState.permissionId
+              ? updatedPermission
+              : permission,
+          ),
+        );
+        closePermissionModal();
+        return;
+      }
+
+      const createdPermission = await createPermission(payload);
+
+      setPermissions((currentValue) => [...currentValue, createdPermission]);
+      setExpandedModuleIds((currentValue) =>
+        currentValue.includes(moduleId) ? currentValue : [...currentValue, moduleId],
+      );
+      closePermissionModal();
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function persistRolePermissions(
+    roleId: number,
+    nextPermissionIds: number[],
+    previousPermissionIds: number[],
+  ) {
+    try {
+      setIsSaving(true);
+      setErrorMessage(null);
+      const updatedPermissions = await replaceRolePermissions(roleId, nextPermissionIds);
+
+      setRolePermissionIdsByRole((currentValue) => ({
+        ...currentValue,
+        [roleId]: updatedPermissions.map((permission) => permission.id),
+      }));
+    } catch (error) {
+      setRolePermissionIdsByRole((currentValue) => ({
+        ...currentValue,
+        [roleId]: previousPermissionIds,
+      }));
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleTogglePermission(permissionId: number) {
@@ -476,25 +616,17 @@ export default function RolesPermissionsPage() {
       return;
     }
 
-    setRolePermissions((currentValue) => {
-      const exists = currentValue.some(
-        (item) => item.role_id === selectedRoleId && item.permission_id === permissionId,
-      );
+    const previousPermissionIds = rolePermissionIdsByRole[selectedRoleId] ?? [];
+    const nextPermissionIds = previousPermissionIds.includes(permissionId)
+      ? previousPermissionIds.filter((currentPermissionId) => currentPermissionId !== permissionId)
+      : [...previousPermissionIds, permissionId];
 
-      if (exists) {
-        return currentValue.filter(
-          (item) => !(item.role_id === selectedRoleId && item.permission_id === permissionId),
-        );
-      }
+    setRolePermissionIdsByRole((currentValue) => ({
+      ...currentValue,
+      [selectedRoleId]: nextPermissionIds,
+    }));
 
-      return [
-        ...currentValue,
-        {
-          role_id: selectedRoleId,
-          permission_id: permissionId,
-        },
-      ];
-    });
+    void persistRolePermissions(selectedRoleId, nextPermissionIds, previousPermissionIds);
   }
 
   function handleToggleAllPermissions(permissionIds: number[], shouldAssign: boolean) {
@@ -502,86 +634,99 @@ export default function RolesPermissionsPage() {
       return;
     }
 
-    setRolePermissions((currentValue) => {
-      const filteredItems = currentValue.filter(
-        (item) =>
-          item.role_id !== selectedRoleId || !permissionIds.includes(item.permission_id),
-      );
+    const previousPermissionIds = rolePermissionIdsByRole[selectedRoleId] ?? [];
+    const scopedPermissionIds = new Set(permissionIds);
+    const keptPermissionIds = previousPermissionIds.filter(
+      (permissionId) => !scopedPermissionIds.has(permissionId),
+    );
+    const nextPermissionIds = shouldAssign
+      ? Array.from(new Set([...keptPermissionIds, ...permissionIds]))
+      : keptPermissionIds;
 
-      if (!shouldAssign) {
-        return filteredItems;
-      }
+    setRolePermissionIdsByRole((currentValue) => ({
+      ...currentValue,
+      [selectedRoleId]: nextPermissionIds,
+    }));
 
-      return [
-        ...filteredItems,
-        ...permissionIds.map((permissionId) => ({
-          role_id: selectedRoleId,
-          permission_id: permissionId,
-        })),
-      ];
-    });
+    void persistRolePermissions(selectedRoleId, nextPermissionIds, previousPermissionIds);
   }
 
-  function handleDeleteItem() {
+  async function handleDeleteItem() {
     if (!deleteState) {
       return;
     }
 
-    if (deleteState.entity === "role") {
-      const nextRoles = roles.filter((role) => role.id !== deleteState.id);
+    try {
+      setIsSaving(true);
+      setErrorMessage(null);
 
-      setRoles(nextRoles);
-      setRolePermissions((currentValue) =>
-        currentValue.filter((item) => item.role_id !== deleteState.id),
-      );
-      setUserRoles((currentValue) =>
-        currentValue.filter((item) => item.role_id !== deleteState.id),
-      );
+      if (deleteState.entity === "role") {
+        await deleteRole(deleteState.id);
 
-      if (selectedRoleId === deleteState.id) {
-        setSelectedRoleId(nextRoles[0]?.id ?? null);
+        const nextRoles = roles.filter((role) => role.id !== deleteState.id);
+        setRoles(nextRoles);
+        setRolePermissionIdsByRole((currentValue) => {
+          const nextValue = { ...currentValue };
+          delete nextValue[deleteState.id];
+          return nextValue;
+        });
+
+        if (selectedRoleId === deleteState.id) {
+          setSelectedRoleId(nextRoles[0]?.id ?? null);
+        }
+
+        closeDeleteDialog();
+        return;
       }
 
-      closeDeleteDialog();
-      return;
-    }
+      if (deleteState.entity === "module") {
+        await deleteModule(deleteState.id);
 
-    if (deleteState.entity === "module") {
-      const removedPermissionIds = permissions
-        .filter((permission) => permission.module_id === deleteState.id)
-        .map((permission) => permission.id);
+        const removedPermissionIds = permissions
+          .filter((permission) => permission.module_id === deleteState.id)
+          .map((permission) => permission.id);
 
-      setModules((currentValue) => currentValue.filter((module) => module.id !== deleteState.id));
+        setModules((currentValue) => currentValue.filter((module) => module.id !== deleteState.id));
+        setPermissions((currentValue) =>
+          currentValue.filter((permission) => permission.module_id !== deleteState.id),
+        );
+        setRolePermissionIdsByRole((currentValue) =>
+          removePermissionIdsFromRoleMap(currentValue, removedPermissionIds),
+        );
+        setExpandedModuleIds((currentValue) =>
+          currentValue.filter((moduleId) => moduleId !== deleteState.id),
+        );
+        closeDeleteDialog();
+        return;
+      }
+
+      await deletePermission(deleteState.id);
+
       setPermissions((currentValue) =>
-        currentValue.filter((permission) => permission.module_id !== deleteState.id),
+        currentValue.filter((permission) => permission.id !== deleteState.id),
       );
-      setRolePermissions((currentValue) =>
-        currentValue.filter((item) => !removedPermissionIds.includes(item.permission_id)),
-      );
-      setExpandedModuleIds((currentValue) =>
-        currentValue.filter((moduleId) => moduleId !== deleteState.id),
+      setRolePermissionIdsByRole((currentValue) =>
+        removePermissionIdsFromRoleMap(currentValue, [deleteState.id]),
       );
       closeDeleteDialog();
-      return;
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSaving(false);
     }
-
-    setPermissions((currentValue) =>
-      currentValue.filter((permission) => permission.id !== deleteState.id),
-    );
-    setRolePermissions((currentValue) =>
-      currentValue.filter((item) => item.permission_id !== deleteState.id),
-    );
-    closeDeleteDialog();
   }
 
   return (
-    <div className="space-y-6">
-      <section className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-[32px] font-light text-slate-900">Roles & Permissions</h1>
+    <PagePlaceholder
+      breadcrumb="Home > Settings > Roles & Permissions"
+      contentClassName="space-y-6"
+      title="Roles & Permissions"
+    >
+      {errorMessage ? (
+        <div className="rounded-[5px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {errorMessage}
         </div>
-        <div className="text-sm text-muted">Home &gt; Settings &gt; Roles & Permissions</div>
-      </section>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[360px_1fr]">
         <div className="space-y-4">
@@ -589,24 +734,34 @@ export default function RolesPermissionsPage() {
             <div>
               <h2 className="text-xl font-semibold text-slate-950">Roles</h2>
             </div>
-            <Button icon={<PlusIcon />} onClick={openRoleModal} size="sm">
+            <Button disabled={isSaving} icon={<PlusIcon />} onClick={openRoleModal} size="sm">
               Add Role
             </Button>
           </div>
 
           <div className="grid gap-4">
-            {roles.map((role) => (
-              <RoleCard
-                isActive={role.id === selectedRoleId}
-                key={role.id}
-                onDelete={() => openDeleteDialog("role", role.id, formatRoleLabel(role.name))}
-                onEdit={() => openEditRoleModal(role.id)}
-                onSelect={() => setSelectedRoleId(role.id)}
-                permissionCount={permissionCountByRole[role.id] ?? 0}
-                role={role}
-                userCount={userCountByRole[role.id] ?? 0}
-              />
-            ))}
+            {isLoading && roles.length === 0 ? (
+              <section className="rounded-[5px] border border-border bg-card p-5 text-sm text-muted shadow-sm">
+                Loading roles and permission assignments...
+              </section>
+            ) : roles.length === 0 ? (
+              <section className="rounded-[5px] border border-border bg-card p-5 text-sm text-muted shadow-sm">
+                No roles found.
+              </section>
+            ) : (
+              roles.map((role) => (
+                <RoleCard
+                  isActive={role.id === selectedRoleId}
+                  key={role.id}
+                  onDelete={() => openDeleteDialog("role", role.id, formatRoleLabel(role.name))}
+                  onEdit={() => openEditRoleModal(role.id)}
+                  onSelect={() => setSelectedRoleId(role.id)}
+                  permissionCount={permissionCountByRole[role.id] ?? 0}
+                  role={role}
+                  userCount={userCountByRole[role.id] ?? 0}
+                />
+              ))
+            )}
           </div>
         </div>
 
@@ -620,7 +775,7 @@ export default function RolesPermissionsPage() {
                 {selectedRole ? formatRoleLabel(selectedRole.name) : "Select a role"}
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-                {selectedRole?.description ??
+                {selectedRole?.description ||
                   "Choose a role card from the left side to configure module permissions."}
               </p>
             </div>
@@ -671,16 +826,28 @@ export default function RolesPermissionsPage() {
               <p className="mt-2 text-sm text-muted">
                 {activeTab === "permissions"
                   ? "Check each permission card to allow access for the selected role."
-                  : "Manage module records and keep module data ready for API integration."}
+                  : "Manage the RBAC modules coming from the backend service."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               {activeTab === "permissions" ? (
-                <Button icon={<PlusIcon />} onClick={() => openPermissionModal()} size="sm" variant="secondary">
+                <Button
+                  disabled={isSaving}
+                  icon={<PlusIcon />}
+                  onClick={() => openPermissionModal()}
+                  size="sm"
+                  variant="secondary"
+                >
                   Add Permission
                 </Button>
               ) : (
-                <Button icon={<PlusIcon />} onClick={openModuleModal} size="sm" variant="secondary">
+                <Button
+                  disabled={isSaving}
+                  icon={<PlusIcon />}
+                  onClick={openModuleModal}
+                  size="sm"
+                  variant="secondary"
+                >
                   Add Module
                 </Button>
               )}
@@ -689,102 +856,114 @@ export default function RolesPermissionsPage() {
 
           {activeTab === "permissions" ? (
             <div className="space-y-4">
-              {modulePermissions.map(({ module, permissions: modulePermissionItems }) => (
-                <PermissionModuleCard
-                  assignedPermissionIds={rolePermissionIds}
-                  headerAction={
-                    <Button
-                      className="hidden sm:inline-flex"
-                      icon={<PlusIcon />}
-                      onClick={() => openPermissionModal(module.id)}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Add
-                    </Button>
-                  }
-                  isExpanded={expandedModuleIds.includes(module.id)}
-                  key={module.id}
-                  module={module}
-                  onDeleteModule={() => openDeleteDialog("module", module.id, module.name)}
-                  onDeletePermission={(permissionId) => {
-                    const permission = permissions.find((item) => item.id === permissionId);
-                    openDeleteDialog("permission", permissionId, permission?.name ?? "this permission");
-                  }}
-                  onEditModule={() => openEditModuleModal(module.id)}
-                  onEditPermission={openEditPermissionModal}
-                  onToggleAll={handleToggleAllPermissions}
-                  onToggleExpand={() => toggleModule(module.id)}
-                  onTogglePermission={handleTogglePermission}
-                  permissions={modulePermissionItems}
-                  selectedRoleLabel={selectedRole ? formatRoleLabel(selectedRole.name) : "role"}
-                />
-              ))}
+              {modulePermissions.length === 0 ? (
+                <section className="rounded-[5px] border border-border bg-card p-5 text-sm text-muted shadow-sm">
+                  {isLoading ? "Loading permissions..." : "No modules or permissions found."}
+                </section>
+              ) : (
+                modulePermissions.map(({ module, permissions: modulePermissionItems }) => (
+                  <PermissionModuleCard
+                    assignedPermissionIds={rolePermissionIds}
+                    headerAction={
+                      <Button
+                        className="hidden sm:inline-flex"
+                        icon={<PlusIcon />}
+                        onClick={() => openPermissionModal(module.id)}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Add
+                      </Button>
+                    }
+                    isExpanded={expandedModuleIds.includes(module.id)}
+                    key={module.id}
+                    module={module}
+                    onDeleteModule={() => openDeleteDialog("module", module.id, module.name)}
+                    onDeletePermission={(permissionId) => {
+                      const permission = permissions.find((item) => item.id === permissionId);
+                      openDeleteDialog("permission", permissionId, permission?.name ?? "this permission");
+                    }}
+                    onEditModule={() => openEditModuleModal(module.id)}
+                    onEditPermission={openEditPermissionModal}
+                    onToggleAll={handleToggleAllPermissions}
+                    onToggleExpand={() => toggleModule(module.id)}
+                    onTogglePermission={handleTogglePermission}
+                    permissions={modulePermissionItems}
+                    selectedRoleLabel={selectedRole ? formatRoleLabel(selectedRole.name) : "role"}
+                  />
+                ))
+              )}
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {modulePermissions.map(({ module, permissions: modulePermissionItems }) => (
-                <section
-                  className="rounded-[5px] border border-border bg-card p-5 shadow-sm"
-                  key={module.id}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-950">{module.name}</h3>
-                      <p className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
-                        {module.slug}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-white text-slate-600 transition hover:border-primary/40 hover:text-primary"
-                        onClick={() => openEditModuleModal(module.id)}
-                        type="button"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <path d="m4 15.75 9.81-9.81 4.25 4.25L8.25 20H4v-4.25Zm12.95-10.7a1.5 1.5 0 0 1 2.12 0l.88.88a1.5 1.5 0 0 1 0 2.12l-.83.83-4.25-4.25.83-.83Z" fill="currentColor" />
-                        </svg>
-                      </button>
-                      <button
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-white text-rose-600 transition hover:border-rose-300 hover:bg-rose-50"
-                        onClick={() => openDeleteDialog("module", module.id, module.name)}
-                        type="button"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
-                          <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v8h-2V9Zm4 0h2v8h-2V9ZM6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Z" fill="currentColor" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-[5px] bg-background px-3 py-2">
-                      <div className="text-xs uppercase tracking-wide text-muted">Icon</div>
-                      <div className="mt-2 flex items-center gap-2 font-semibold text-slate-900">
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] bg-white text-primary ring-1 ring-inset ring-border">
-                          <AppIcon className="h-[18px] w-[18px]" name={module.icon} />
-                        </span>
-                        <span>{module.icon}</span>
+              {modulePermissions.length === 0 ? (
+                <section className="rounded-[5px] border border-border bg-card p-5 text-sm text-muted shadow-sm">
+                  {isLoading ? "Loading modules..." : "No modules found."}
+                </section>
+              ) : (
+                modulePermissions.map(({ module, permissions: modulePermissionItems }) => (
+                  <section
+                    className="rounded-[5px] border border-border bg-card p-5 shadow-sm"
+                    key={module.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-950">{module.name}</h3>
+                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-primary">
+                          {module.slug}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-white text-slate-600 transition hover:border-primary/40 hover:text-primary"
+                          onClick={() => openEditModuleModal(module.id)}
+                          type="button"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <path d="m4 15.75 9.81-9.81 4.25 4.25L8.25 20H4v-4.25Zm12.95-10.7a1.5 1.5 0 0 1 2.12 0l.88.88a1.5 1.5 0 0 1 0 2.12l-.83.83-4.25-4.25.83-.83Z" fill="currentColor" />
+                          </svg>
+                        </button>
+                        <button
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] border border-border bg-white text-rose-600 transition hover:border-rose-300 hover:bg-rose-50"
+                          onClick={() => openDeleteDialog("module", module.id, module.name)}
+                          type="button"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v8h-2V9Zm4 0h2v8h-2V9ZM6 7h12l-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Z" fill="currentColor" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
-                    <div className="rounded-[5px] bg-background px-3 py-2">
-                      <div className="text-xs uppercase tracking-wide text-muted">Permissions</div>
-                      <div className="mt-1 font-semibold text-slate-900">{modulePermissionItems.length}</div>
-                    </div>
-                  </div>
 
-                  <div className="mt-4">
-                    <Button
-                      icon={<PlusIcon />}
-                      onClick={() => openPermissionModal(module.id)}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Add Permission
-                    </Button>
-                  </div>
-                </section>
-              ))}
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-[5px] bg-background px-3 py-2">
+                        <div className="text-xs uppercase tracking-wide text-muted">Icon</div>
+                        <div className="mt-2 flex items-center gap-2 font-semibold text-slate-900">
+                          <span className="inline-flex h-9 w-9 items-center justify-center rounded-[5px] bg-white text-primary ring-1 ring-inset ring-border">
+                            <AppIcon className="h-[18px] w-[18px]" name={module.icon} />
+                          </span>
+                          <span>{module.icon}</span>
+                        </div>
+                      </div>
+                      <div className="rounded-[5px] bg-background px-3 py-2">
+                        <div className="text-xs uppercase tracking-wide text-muted">Permissions</div>
+                        <div className="mt-1 font-semibold text-slate-900">{modulePermissionItems.length}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <Button
+                        icon={<PlusIcon />}
+                        onClick={() => openPermissionModal(module.id)}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Add Permission
+                      </Button>
+                    </div>
+                  </section>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -798,7 +977,15 @@ export default function RolesPermissionsPage() {
         onChange={handleRoleFieldChange}
         onClose={closeRoleModal}
         onSubmit={handleSaveRole}
-        submitLabel={roleDialogState?.mode === "edit" ? "Save Role" : "Create Role"}
+        submitLabel={
+          isSaving
+            ? roleDialogState?.mode === "edit"
+              ? "Saving..."
+              : "Creating..."
+            : roleDialogState?.mode === "edit"
+              ? "Save Role"
+              : "Create Role"
+        }
         title={roleDialogState?.mode === "edit" ? "Edit Role" : "Add Role"}
         values={roleFormValues}
       />
@@ -811,7 +998,15 @@ export default function RolesPermissionsPage() {
         onChange={handleModuleFieldChange}
         onClose={closeModuleModal}
         onSubmit={handleSaveModule}
-        submitLabel={moduleDialogState?.mode === "edit" ? "Save Module" : "Create Module"}
+        submitLabel={
+          isSaving
+            ? moduleDialogState?.mode === "edit"
+              ? "Saving..."
+              : "Creating..."
+            : moduleDialogState?.mode === "edit"
+              ? "Save Module"
+              : "Create Module"
+        }
         title={moduleDialogState?.mode === "edit" ? "Edit Module" : "Add Module"}
         values={moduleFormValues}
       />
@@ -824,14 +1019,22 @@ export default function RolesPermissionsPage() {
         onChange={handlePermissionFieldChange}
         onClose={closePermissionModal}
         onSubmit={handleSavePermission}
-        submitLabel={permissionDialogState?.mode === "edit" ? "Save Permission" : "Create Permission"}
+        submitLabel={
+          isSaving
+            ? permissionDialogState?.mode === "edit"
+              ? "Saving..."
+              : "Creating..."
+            : permissionDialogState?.mode === "edit"
+              ? "Save Permission"
+              : "Create Permission"
+        }
         title={permissionDialogState?.mode === "edit" ? "Edit Permission" : "Add Permission"}
         values={permissionFormValues}
       />
 
       <ConfirmModal
         confirmClassName="border-rose-600 bg-rose-600 text-white hover:border-rose-700 hover:bg-rose-700"
-        confirmLabel="Delete"
+        confirmLabel={isSaving ? "Working..." : "Delete"}
         description="Are you sure you want to delete"
         emphasisMessage="This action cannot be undone."
         emphasisTone="danger"
@@ -847,6 +1050,6 @@ export default function RolesPermissionsPage() {
               : "Delete Permission"
         }
       />
-    </div>
+    </PagePlaceholder>
   );
 }

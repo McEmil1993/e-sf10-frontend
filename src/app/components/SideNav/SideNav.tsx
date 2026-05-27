@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppIcon from "@/app/components/Icon/AppIcon";
 import type { SideNavProps } from "@/app/types/components/sideNavTypes";
 import type { NavItem } from "@/app/types/navigationTypes";
@@ -39,28 +39,37 @@ export default function SideNav({
   user,
 }: SideNavProps) {
   const pathname = usePathname();
-  const activeParents = useMemo(
-    () =>
-      items.reduce<Record<string, boolean>>((result, item) => {
-        result[item.label] = itemHasActiveChild(pathname, item);
-        return result;
-      }, {}),
-    [items, pathname],
-  );
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(activeParents);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [collapsedOpenLabel, setCollapsedOpenLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    setExpandedItems((currentValue) => ({
-      ...currentValue,
-      ...activeParents,
-    }));
-  }, [activeParents]);
+    if (!isCollapsed) {
+      return undefined;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!asideRef.current?.contains(event.target as Node)) {
+        setCollapsedOpenLabel(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isCollapsed]);
 
   function toggleItem(label: string) {
     setExpandedItems((currentValue) => ({
       ...currentValue,
       [label]: !currentValue[label],
     }));
+  }
+
+  function toggleCollapsedItem(label: string) {
+    setCollapsedOpenLabel((currentValue) => (currentValue === label ? null : label));
   }
 
   return (
@@ -73,6 +82,7 @@ export default function SideNav({
         onClick={onClose}
       />
       <aside
+        ref={asideRef}
         className={[
           "fixed bottom-0 left-0 top-12 z-40 flex flex-col overflow-y-auto bg-sidebar text-sidebar-foreground shadow-xl transition-all duration-300 md:static md:h-full md:shrink-0 md:translate-x-0 md:shadow-none",
           isCollapsed ? "w-[250px] md:w-16" : "w-[250px]",
@@ -123,11 +133,13 @@ export default function SideNav({
             const hasChildren = Boolean(item.children?.length);
             const childActive = itemHasActiveChild(pathname, item);
             const active = item.href ? isActivePath(pathname, item.href) : childActive;
-            const expanded = !isCollapsed && (expandedItems[item.label] ?? childActive);
+            const expanded = !isCollapsed && ((expandedItems[item.label] ?? false) || childActive);
+            const collapsedExpanded =
+              isCollapsed && (childActive || collapsedOpenLabel === item.label);
 
             if (hasChildren) {
               return (
-                <div className="space-y-0.5" key={item.label}>
+                <div className="relative space-y-0.5" key={item.label}>
                   <button
                     className={[
                       "group w-full rounded-sm text-sm transition",
@@ -138,7 +150,14 @@ export default function SideNav({
                         ? "bg-primary text-topbar-foreground"
                         : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-title",
                     ].join(" ")}
-                    onClick={() => toggleItem(item.label)}
+                    onClick={() => {
+                      if (isCollapsed) {
+                        toggleCollapsedItem(item.label);
+                        return;
+                      }
+
+                      toggleItem(item.label);
+                    }}
                     title={item.label}
                     type="button"
                   >
@@ -180,6 +199,38 @@ export default function SideNav({
                           </Link>
                         ) : null;
                       })}
+                    </div>
+                  ) : null}
+                  {collapsedExpanded ? (
+                    <div className="absolute left-[calc(100%+8px)] top-0 z-50 hidden min-w-[220px] overflow-hidden rounded-[5px] border border-border bg-card shadow-xl md:block">
+                      <div className="border-b border-border px-4 py-3 text-sm font-semibold text-slate-950">
+                        {item.label}
+                      </div>
+                      <div className="space-y-0.5 p-2">
+                        {item.children?.map((child) => {
+                          const childIsActive = child.href ? isActivePath(pathname, child.href) : false;
+
+                          return child.href ? (
+                            <Link
+                              className={[
+                                "flex items-center gap-2 rounded-[5px] px-3 py-2 text-sm transition",
+                                childIsActive
+                                  ? "bg-primary text-topbar-foreground"
+                                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                              ].join(" ")}
+                              href={child.href}
+                              key={child.href}
+                              onClick={() => {
+                                setCollapsedOpenLabel(null);
+                                onClose();
+                              }}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                              <span className="flex-1">{child.label}</span>
+                            </Link>
+                          ) : null;
+                        })}
+                      </div>
                     </div>
                   ) : null}
                 </div>

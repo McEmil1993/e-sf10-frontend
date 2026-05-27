@@ -6,7 +6,8 @@ import type {
   UsersSortField,
   UsersSortOrder,
 } from "@/app/types/userTypes";
-import { formatDate } from "@/app/utils/mockData";
+import { formatDate } from "@/app/lib/display";
+import { resolveBackendAssetUrl } from "@/app/utils/api";
 
 const markdownEmailPattern = /^\[[^[\]]+\]\(mailto:([^)]+)\)$/i;
 
@@ -33,7 +34,7 @@ export function normalizeUserRecord(user: AdminUser): AdminUser {
   return {
     ...user,
     email: normalizeEmail(user.email),
-    avatar: user.profile_picture ?? user.avatar ?? "",
+    avatar: user.avatar ?? resolveBackendAssetUrl(user.profile_picture) ?? "",
     roles: user.roles,
   };
 }
@@ -43,12 +44,14 @@ export function toUserTableRow(user: AdminUser): UserTableRow {
     id: user.id,
     name: user.name,
     email: user.email,
-    avatar: user.profile_picture ?? user.avatar ?? "",
+    avatar: user.avatar ?? resolveBackendAssetUrl(user.profile_picture) ?? "",
     role: user.roles[0] ?? "user",
+    position: user.position ?? "-",
     status: user.status,
     username: user.username ?? "",
     contact_number: user.contact_number ?? "",
     created_at: formatDate(user.created_at),
+    updated_at: formatDate(user.updated_at),
   };
 }
 
@@ -61,7 +64,7 @@ export function createUsersResponse(
   const search = (options.search ?? defaultQueryOptions.search).trim();
   const sortBy = options.sortBy ?? defaultQueryOptions.sortBy;
   const sortOrder = options.sortOrder ?? defaultQueryOptions.sortOrder;
-  const basePath = options.basePath ?? "/api/users";
+  const basePath = options.basePath ?? "/users";
 
   const filteredUsers = users.filter((user) => matchesSearch(user, search));
   const sortedUsers = filteredUsers.slice().sort((firstUser, secondUser) =>

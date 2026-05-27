@@ -1,4 +1,4 @@
-import type { AdminUser, UserFormValues } from "@/app/types/userTypes";
+import type { AdminUser } from "@/app/types/userTypes";
 
 export type UsersManagerProps = {
   initialUsers: AdminUser[];

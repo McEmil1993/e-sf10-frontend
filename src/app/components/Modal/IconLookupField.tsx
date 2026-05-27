@@ -21,8 +21,8 @@ export default function IconLookupField({ disabled, onChange, options, value }: 
     <div className="space-y-3">
       <input
         className={[
-          "h-9 w-full rounded-[5px] border border-border bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-2 focus:ring-sky-100",
-          disabled ? "cursor-default bg-slate-50 text-slate-600" : "",
+          "h-9 w-full rounded-[5px] border border-border bg-card px-3 text-sm text-foreground outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/15",
+          disabled ? "cursor-default bg-background text-muted" : "",
         ].join(" ")}
         disabled={disabled}
         onChange={(event) => setQuery(event.target.value)}
@@ -39,9 +39,9 @@ export default function IconLookupField({ disabled, onChange, options, value }: 
               className={[
                 "flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-[5px] border px-2 py-3 text-center transition",
                 isSelected
-                  ? "border-primary bg-sky-50 text-primary shadow-sm"
-                  : "border-border bg-white text-slate-700 hover:border-primary/40 hover:text-primary",
-                disabled ? "pointer-events-none bg-slate-50 text-slate-500" : "",
+                  ? "border-primary bg-accent text-primary shadow-sm"
+                  : "border-border bg-card text-foreground hover:border-primary/40 hover:text-primary",
+                disabled ? "pointer-events-none bg-background text-muted" : "",
               ].join(" ")}
               key={option.value}
               onClick={() => onChange(option.value)}
