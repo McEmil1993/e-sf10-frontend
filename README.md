@@ -5,7 +5,10 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, set your preferred port in `.env`:
 
 ```bash
-PORT=3000
+PORT=4444
+BASE_API=http://localhost:5555/api
+BASE_URL=http://localhost:5555
+PUPIL_ROUTE_SECRET=953a1afeaa9d4641ba07c5467ff79b95
 ```
 
 Then, run the development server:
