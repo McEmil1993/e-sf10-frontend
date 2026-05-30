@@ -112,6 +112,18 @@ export type BackendStudentInformationResponseDto = {
 export type BackendAuthResponseDto = {
   user: BackendUserResponseDto;
   token: string;
+  temporaryPasswordLogin: {
+    required: true;
+    recoveryRequestId: number;
+    expiresAt: string;
+  } | null;
+};
+
+export type BackendForgotPasswordResponseDto = {
+  method: "temporary_password" | "otp_email";
+  email?: string;
+  recoveryRequestId: number;
+  expiresAt: string;
 };
 
 export type BackendRoleResponseDto = {
@@ -156,10 +168,25 @@ export type BackendPositionResponseDto = {
   deletedAt: string | null;
 };
 
+export type BackendSubjectResponseDto = {
+  id: number;
+  name: string;
+  subjectGroup: string | null;
+  gradeLevels: number[];
+  isOptional: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
 export type BackendSchoolSettingsResponseDto = {
   schoolId: number;
   depedSchoolId: string;
   schoolName: string;
+  schoolEmail: string | null;
+  schoolNumber: string | null;
   district: string;
   division: string;
   region: string;
@@ -170,4 +197,36 @@ export type BackendSchoolSettingsResponseDto = {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+};
+
+export type BackendEmailSmtpSettingsResponseDto = {
+  id: number | null;
+  provider: "gmail";
+  gmailEmail: string;
+  gmailAppPassword: string;
+  hasGmailAppPassword: boolean;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  isEnabled: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type BackendEmailTemplateKey = "password_recovery" | "official_notices" | "otp";
+
+export type BackendEmailTemplateResponseDto = {
+  id: number;
+  templateKey: BackendEmailTemplateKey;
+  templateName: string;
+  subject: string;
+  htmlContent: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
+export type BackendPasswordRecoverySettingsResponseDto = {
+  forgotPasswordMethod: "temporary_password" | "otp_email";
 };

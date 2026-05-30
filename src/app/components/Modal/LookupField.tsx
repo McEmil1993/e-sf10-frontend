@@ -21,18 +21,23 @@ export default function LookupField({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const selectedOption = useMemo(
+    () => options.find((option) => option.value === value) ?? null,
+    [options, value],
+  );
+  const displayValue = selectedOption?.label ?? value;
 
   const filteredOptions = useMemo(() => {
-    const normalizedValue = value.trim().toLowerCase();
+    const normalizedValue = displayValue.trim().toLowerCase();
 
     if (!normalizedValue) {
-      return [];
+      return options;
     }
 
     return options.filter((option) => option.label.toLowerCase().includes(normalizedValue));
-  }, [options, value]);
+  }, [displayValue, options]);
 
-  const shouldShowOptions = !disabled && isFocused && value.trim().length > 0 && filteredOptions.length > 0;
+  const shouldShowOptions = !disabled && isFocused && filteredOptions.length > 0;
 
   const updateDropdownPosition = useCallback(() => {
     const container = containerRef.current;
@@ -60,8 +65,7 @@ export default function LookupField({
 
   useEffect(() => {
     if (!shouldShowOptions) {
-      setDropdownPosition(null);
-      return;
+      return undefined;
     }
 
     updateDropdownPosition();
@@ -118,7 +122,7 @@ export default function LookupField({
         onFocus={() => setIsFocused(true)}
         placeholder={placeholder}
         type="text"
-        value={value}
+        value={displayValue}
       />
       {dropdown}
     </div>

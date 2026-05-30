@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import AppIcon from "@/app/components/Icon/AppIcon";
+import UserAvatar from "@/app/components/User/UserAvatar";
 import type { SideNavProps } from "@/app/types/components/sideNavTypes";
 import type { NavItem } from "@/app/types/navigationTypes";
 
@@ -21,16 +22,6 @@ function itemHasActiveChild(pathname: string, item: NavItem): boolean {
   });
 }
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-}
-
 export default function SideNav({
   isCollapsed,
   isOpen,
@@ -42,6 +33,8 @@ export default function SideNav({
   const asideRef = useRef<HTMLElement | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [collapsedOpenLabel, setCollapsedOpenLabel] = useState<string | null>(null);
+  const userProfilePicture = user.profile_picture?.trim() || user.avatar?.trim() || "";
+  const displayName = user.username?.trim() || user.email || user.name;
 
   useEffect(() => {
     if (!isCollapsed) {
@@ -101,12 +94,15 @@ export default function SideNav({
               isCollapsed ? "justify-center" : "",
             ].join(" ")}
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/10 text-sm font-semibold text-sidebar-title">
-              {getInitials(user.name)}
-            </div>
+            <UserAvatar
+              className="h-10 w-10"
+              imageClassName="ring-1 ring-white/10"
+              name={user.name}
+              src={userProfilePicture}
+            />
             {!isCollapsed ? (
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-sidebar-title">{user.name}</p>
+                <p className="truncate text-sm font-semibold text-sidebar-title">{displayName}</p>
                 <div className="flex items-center gap-2 text-xs text-sidebar-foreground">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   <span>Online</span>

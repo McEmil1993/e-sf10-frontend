@@ -93,6 +93,7 @@ export default async function DashboardPage() {
     email: user.email,
     avatar: user.avatar ?? "",
     role: getPrimaryUserRole(user),
+    roles: user.roles.length > 0 ? user.roles : ["user"],
     status: user.status,
     created_at: formatDate(user.created_at),
       }));

@@ -3,22 +3,23 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import AuthenticatedImage from "@/app/components/Image/AuthenticatedImage";
+import UserAvatar from "@/app/components/User/UserAvatar";
 import logoWhite from "@/app/logo-white.png";
+import type { SchoolSettings } from "@/app/types/systemTypes";
 import type {
   NavUtilityIconProps,
   TopNavProps,
 } from "@/app/types/components/topNavTypes";
-import { logout } from "@/app/utils/api";
+import { getAssetDataUrl, getSchoolSettings, logout } from "@/app/utils/api";
+import {
+  cacheSchoolBranding,
+  getSchoolShortName,
+  readCachedSchoolBranding,
+  toSchoolBranding,
+} from "@/app/utils/schoolBranding";
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0))
-    .join("")
-    .toUpperCase();
-}
+const schoolSettingsUpdatedEvent = "school-settings-updated";
 
 function NavUtilityIcon({ type }: NavUtilityIconProps) {
   const className = "h-7 w-7";
@@ -49,7 +50,96 @@ function NavUtilityIcon({ type }: NavUtilityIconProps) {
 export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNavProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [schoolSettings, setSchoolSettings] = useState<SchoolSettings | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const schoolLogo = schoolSettings?.school_logo.trim() ?? "";
+  const schoolName = schoolSettings?.school_name.trim() ?? "";
+  const schoolShortName = schoolName ? getSchoolShortName(schoolName) : "";
+  const userProfilePicture = user.profile_picture?.trim() || user.avatar?.trim() || "";
+
+  async function cacheSettingsBranding(settings: SchoolSettings) {
+    const branding = toSchoolBranding(settings);
+
+    if (!branding) {
+      cacheSchoolBranding(null);
+      return;
+    }
+
+    if (!branding.schoolLogo) {
+      cacheSchoolBranding(branding);
+      return;
+    }
+
+    const schoolLogoDataUrl = await getAssetDataUrl(branding.schoolLogo).catch(() => "");
+    cacheSchoolBranding({
+      ...branding,
+      schoolLogo: schoolLogoDataUrl || branding.schoolLogo,
+    });
+  }
+
+  useEffect(() => {
+    let isDisposed = false;
+    const cachedBranding = readCachedSchoolBranding();
+
+    if (cachedBranding) {
+      queueMicrotask(() => {
+        if (!isDisposed) {
+          setSchoolSettings((currentValue) => currentValue ?? {
+            school_id: 0,
+            deped_school_id: "",
+            school_name: cachedBranding.schoolName,
+            school_email: "",
+            school_number: "",
+            district: "",
+            division: "",
+            region: "",
+            address: "",
+            school_logo: cachedBranding.schoolLogo,
+            deped_logo: "",
+            other_logo: "",
+            created_at: "",
+            updated_at: "",
+            deleted_at: null,
+          });
+        }
+      });
+    }
+
+    async function loadSchoolSettings() {
+      try {
+        const settings = await getSchoolSettings();
+
+        if (!isDisposed) {
+          void cacheSettingsBranding(settings);
+          setSchoolSettings(settings);
+        }
+      } catch {
+        if (!isDisposed && !cachedBranding) {
+          setSchoolSettings(null);
+        }
+      }
+    }
+
+    function handleSchoolSettingsUpdated(event: Event) {
+      const settings = (event as CustomEvent<SchoolSettings>).detail;
+
+      if (settings) {
+        void cacheSettingsBranding(settings);
+        setSchoolSettings(settings);
+        return;
+      }
+
+      void loadSchoolSettings();
+    }
+
+    void loadSchoolSettings();
+    window.addEventListener(schoolSettingsUpdatedEvent, handleSchoolSettingsUpdated);
+
+    return () => {
+      isDisposed = true;
+      window.removeEventListener(schoolSettingsUpdatedEvent, handleSchoolSettingsUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isProfileMenuOpen) {
@@ -100,14 +190,48 @@ export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNa
       >
         <div className={["flex items-center", isSidebarCollapsed ? "justify-center" : "gap-2.5"].join(" ")}>
           {isSidebarCollapsed ? (
-            <Image
-              alt="E-SF10"
-              className="rounded-sm object-cover"
-              height={24}
-              priority
-              src="/icon.png"
-              width={24}
-            />
+            schoolLogo ? (
+              <AuthenticatedImage
+                alt={schoolName || "School Logo"}
+                className="h-7 w-7 rounded-sm object-contain"
+                fallback={
+                  <Image
+                    alt="E-SF10"
+                    className="rounded-sm object-cover"
+                    height={24}
+                    priority
+                    src="/icon.png"
+                    width={24}
+                  />
+                }
+                src={schoolLogo}
+              />
+            ) : (
+              <Image
+                alt="E-SF10"
+                className="rounded-sm object-cover"
+                height={24}
+                priority
+                src="/icon.png"
+                width={24}
+              />
+            )
+          ) : schoolLogo || schoolShortName ? (
+            <>
+              {schoolLogo ? (
+                <AuthenticatedImage
+                  alt={schoolName || "School Logo"}
+                  className="h-8 w-8 shrink-0 rounded-sm object-contain"
+                  fallback={null}
+                  src={schoolLogo}
+                />
+              ) : null}
+              {schoolShortName ? (
+                <span className="truncate text-2xl font-extrabold tracking-normal text-white" title={schoolName}>
+                  {schoolShortName}
+                </span>
+              ) : null}
+            </>
           ) : (
             <Image
               alt="E-SF10"
@@ -146,14 +270,19 @@ export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNa
             <button
               aria-expanded={isProfileMenuOpen}
               aria-haspopup="menu"
-              className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-black/10 text-xs font-semibold transition hover:bg-black/15"
+              className="flex h-9 w-9 cursor-pointer list-none items-center justify-center overflow-hidden rounded-full bg-black/10 text-xs font-semibold transition hover:bg-black/15"
               onClick={() => {
                 setIsProfileMenuOpen((currentValue) => !currentValue);
               }}
               style={{ color: "var(--topbar-foreground)" }}
               type="button"
             >
-              {getInitials(user.name)}
+              <UserAvatar
+                className="h-9 w-9"
+                imageClassName="ring-1 ring-white/10"
+                name={user.name}
+                src={userProfilePicture}
+              />
             </button>
             {isProfileMenuOpen ? (
               <div

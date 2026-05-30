@@ -10,12 +10,15 @@ export type ModalFieldType =
   | "email"
   | "password"
   | "date"
+  | "date-range"
   | "select"
+  | "radio-group"
   | "textarea"
   | "icon-lookup"
   | "checkbox-group"
   | "lookup"
-  | "file";
+  | "file"
+  | "school-year-range";
 
 export type ModalInputSize = "sm" | "md" | "lg";
 export type ModalImageCropShape = "circle" | "square";
@@ -47,6 +50,9 @@ export type ModalField = {
   enableImageCrop?: boolean;
   cropShape?: ModalImageCropShape;
   cropAspect?: number;
+  rangeEndName?: string;
+  yearStart?: number;
+  yearEnd?: number;
 };
 
 export type ModalProps = {

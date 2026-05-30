@@ -38,6 +38,40 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function getBackupDateFromFilename(filename: string) {
+  const match = filename.match(/^(?:backup|imported)-(\d{4})-(\d{1,2})-(\d{1,2})_(\d{2})-(\d{2})-(\d{2})\.sql$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day, hours, minutes, seconds] = match;
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    Number(seconds),
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function getBackupUpdatedLabel(backup: BackupFileItem) {
+  const filenameDate = getBackupDateFromFilename(backup.filename);
+
+  if (filenameDate) {
+    return formatDateTime(filenameDate.toISOString());
+  }
+
+  return formatDateTime(backup.lastModifiedAt);
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -101,7 +135,7 @@ export default function BackupRecoveryPage() {
     display_name: backup.displayName,
     filename: backup.filename,
     source_label: backup.source === "import" ? "Imported file" : "Generated export",
-    updated_at: formatDateTime(backup.lastModifiedAt),
+    updated_at: getBackupUpdatedLabel(backup),
     size_label: formatFileSize(backup.sizeInBytes),
   }));
 

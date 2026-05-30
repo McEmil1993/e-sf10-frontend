@@ -1,12 +1,6 @@
-import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
+import AcademicCrudPage from "@/app/components/Academic/AcademicCrudPage";
+import { academicPageConfigs } from "@/app/config/academicPageConfigs";
 
 export default function StudentsGradesPage() {
-  return (
-    <PagePlaceholder
-      breadcrumb="Home > Students > Grades"
-      description="This page is ready for student grades and academic performance details."
-      sectionLabel="Students panel"
-      title="Grades"
-    />
-  );
+  return <AcademicCrudPage config={academicPageConfigs.grades} />;
 }

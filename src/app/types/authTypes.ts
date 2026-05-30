@@ -8,7 +8,18 @@ export type LoginState = {
 
 export type SessionUser = Pick<
   AdminUser,
-  "id" | "name" | "email" | "roles" | "status" | "created_at"
+  | "id"
+  | "name"
+  | "email"
+  | "username"
+  | "roles"
+  | "status"
+  | "created_at"
+  | "avatar"
+  | "profile_picture"
 >;
 
-export type SessionShellUser = Pick<SessionUser, "name" | "email" | "roles">;
+export type SessionShellUser = Pick<
+  SessionUser,
+  "name" | "email" | "username" | "roles" | "avatar" | "profile_picture"
+>;

@@ -46,6 +46,7 @@ export function toUserTableRow(user: AdminUser): UserTableRow {
     email: user.email,
     avatar: user.avatar ?? resolveBackendAssetUrl(user.profile_picture) ?? "",
     role: user.roles[0] ?? "user",
+    roles: user.roles.length > 0 ? user.roles : ["user"],
     position: user.position ?? "-",
     status: user.status,
     username: user.username ?? "",

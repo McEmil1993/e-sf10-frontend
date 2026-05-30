@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ToastItem, ToastTone, ToastViewportProps } from "@/app/types/components/toastTypes";
 
 const toastToneClasses: Record<ToastTone, string> = {
@@ -56,29 +56,58 @@ function ToastCard({
   title,
   tone = "info",
 }: ToastItem & { onDismiss: (toastId: string) => void }) {
+  const [isVisible, setIsVisible] = useState(false);
+  const dismissTimeoutRef = useRef<number | null>(null);
+
+  const dismissWithAnimation = useCallback(() => {
+    setIsVisible(false);
+
+    if (dismissTimeoutRef.current) {
+      window.clearTimeout(dismissTimeoutRef.current);
+    }
+
+    dismissTimeoutRef.current = window.setTimeout(() => {
+      onDismiss(id);
+    }, 220);
+  }, [id, onDismiss]);
+
+  useEffect(() => {
+    const animationFrameId = window.requestAnimationFrame(() => {
+      setIsVisible(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
   useEffect(() => {
     if (duration <= 0) {
       return undefined;
     }
 
     const timeoutId = window.setTimeout(() => {
-      onDismiss(id);
+      dismissWithAnimation();
     }, duration);
 
     return () => {
       window.clearTimeout(timeoutId);
+      if (dismissTimeoutRef.current) {
+        window.clearTimeout(dismissTimeoutRef.current);
+      }
     };
-  }, [duration, id, onDismiss]);
+  }, [dismissWithAnimation, duration]);
 
   return (
     <div
       className={[
-        "pointer-events-auto w-full max-w-sm rounded-xl border px-4 py-3 shadow-lg backdrop-blur",
+        "pointer-events-auto w-full max-w-sm rounded-xl border px-4 py-3 shadow-lg backdrop-blur transition-all duration-200 ease-out",
+        isVisible ? "translate-x-0 opacity-100" : "translate-x-full opacity-0",
         toastToneClasses[tone],
       ].join(" ")}
       role="status"
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <span
           className={[
             "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
@@ -87,14 +116,14 @@ function ToastCard({
         >
           <ToastIcon tone={tone} />
         </span>
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-sm font-semibold">{title}</p>
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+          <p className="text-sm font-semibold leading-5">{title}</p>
           {description ? <div className="text-sm text-slate-700">{description}</div> : null}
         </div>
         <button
           aria-label="Dismiss toast"
           className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-black/5 hover:text-slate-600"
-          onClick={() => onDismiss(id)}
+          onClick={dismissWithAnimation}
           type="button"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24">

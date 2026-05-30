@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Button from "@/app/components/Button/Button";
+import GuardianViewModal from "@/app/components/Guardian/GuardianViewModal";
 import { DeleteIcon, EditIcon, ViewIcon } from "@/app/components/Icon/UserActionIcons";
 import ConfirmModal from "@/app/components/Modal/ConfirmModal";
 import FormModal from "@/app/components/Modal/FormModal";
@@ -344,6 +345,11 @@ export default function GuardiansPage() {
     [deleteState?.guardianId, guardians],
   );
 
+  const viewGuardian = useMemo(
+    () => guardians.find((guardian) => guardian.id === dialogState?.guardianId) ?? null,
+    [dialogState?.guardianId, guardians],
+  );
+
   const tableGuardians: GuardianTableRow[] = useMemo(
     () => guardiansResponse.data.map(toGuardianTableRow),
     [guardiansResponse.data],
@@ -574,16 +580,6 @@ export default function GuardiansPage() {
       secondaryValueClassName: "text-xs text-muted",
     },
     {
-      key: "contact_number",
-      header: "Contact Number",
-      valueClassName: "text-sm text-slate-700",
-    },
-    {
-      key: "location",
-      header: "Location",
-      valueClassName: "text-sm text-slate-700",
-    },
-    {
       key: "address",
       header: "Address",
       valueClassName: "text-sm text-slate-700",
@@ -668,7 +664,7 @@ export default function GuardiansPage() {
         footerClassName="border-t border-border bg-card px-5 py-4 sm:px-5"
         gridClassName="grid-cols-1 md:grid-cols-6 xl:grid-cols-12 xl:auto-rows-min"
         headerClassName="border-b border-border px-5 py-3.5 sm:px-5"
-        isOpen={Boolean(dialogState)}
+        isOpen={Boolean(dialogState) && dialogState?.mode !== "view"}
         labelClassName="text-[13px] font-semibold text-slate-700"
         mode={dialogState?.mode ?? "view"}
         onChange={handleFieldChange}
@@ -694,6 +690,13 @@ export default function GuardiansPage() {
         }
         titleClassName="text-[17px] font-semibold text-slate-950 sm:text-[18px]"
         values={formValues}
+      />
+
+      <GuardianViewModal
+        guardian={viewGuardian}
+        isOpen={dialogState?.mode === "view"}
+        onClose={closeDialog}
+        onEdit={openEditModal}
       />
 
       <ConfirmModal

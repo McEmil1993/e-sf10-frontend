@@ -12,7 +12,7 @@ export type TableAction<T> = {
 export type TableColumn<T> = {
   key: keyof T | string;
   header: string;
-  type?: "text" | "stacked" | "badge" | "actions";
+  type?: "text" | "stacked" | "badge" | "badges" | "actions";
   showAvatar?: boolean;
   avatarImageKey?: keyof T | string;
   avatarFallbackKey?: keyof T | string;

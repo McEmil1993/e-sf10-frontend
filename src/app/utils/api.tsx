@@ -4,16 +4,21 @@ import type { SessionUser } from "@/app/types/authTypes";
 import type {
   BackendApiResponse,
   BackendAuthResponseDto,
+  BackendForgotPasswordResponseDto,
   BackendGuardianResponseDto,
   BackendModuleResponseDto,
   BackendPermissionResponseDto,
+  BackendPasswordRecoverySettingsResponseDto,
   BackendSchoolSettingsResponseDto,
+  BackendEmailSmtpSettingsResponseDto,
+  BackendEmailTemplateResponseDto,
   BackendStudentInformationLookupDto,
   BackendStudentInformationLookupsResponseDto,
   BackendStudentInformationResponseDto,
   BackendStudentGuardianResponseDto,
   BackendStudentResponseDto,
   BackendPositionResponseDto,
+  BackendSubjectResponseDto,
   BackendRoleResponseDto,
   BackendUserResponseDto,
 } from "@/app/types/backendTypes";
@@ -31,8 +36,16 @@ import type {
   StudentSex,
   StudentStatus,
 } from "@/app/types/studentTypes";
+import type { SubjectRecord } from "@/app/types/subjectTypes";
 import type { AdminUser, ChangePasswordPayload, UserSex, UserStatus } from "@/app/types/userTypes";
-import type { SchoolSettings } from "@/app/types/systemTypes";
+import type {
+  EmailSmtpSettings,
+  EmailTemplate,
+  EmailTemplateKey,
+  ForgotPasswordMethod,
+  PasswordRecoverySettings,
+  SchoolSettings,
+} from "@/app/types/systemTypes";
 
 export const AUTH_COOKIE_NAME = "tmc-itclub-session";
 export const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -40,6 +53,11 @@ export const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 export type AuthSessionCookie = {
   token: string;
   user: SessionUser;
+  temporaryPasswordLogin?: {
+    required: true;
+    recoveryRequestId: number;
+    expiresAt: string;
+  } | null;
 };
 
 export type ApiRequestOptions = {
@@ -376,11 +394,28 @@ function mapBackendStudentInformation(
   };
 }
 
+function mapBackendSubjectToSubjectRecord(subject: BackendSubjectResponseDto): SubjectRecord {
+  return {
+    id: subject.id,
+    name: subject.name,
+    subject_group: subject.subjectGroup ?? "",
+    grade_levels: subject.gradeLevels,
+    is_optional: Boolean(subject.isOptional),
+    sort_order: subject.sortOrder,
+    is_active: Boolean(subject.isActive),
+    created_at: subject.createdAt,
+    updated_at: subject.updatedAt,
+    deleted_at: subject.deletedAt,
+  };
+}
+
 function mapBackendSchoolSettings(school: BackendSchoolSettingsResponseDto): SchoolSettings {
   return {
     school_id: school.schoolId,
     deped_school_id: school.depedSchoolId,
     school_name: school.schoolName,
+    school_email: school.schoolEmail ?? "",
+    school_number: school.schoolNumber ?? "",
     district: school.district,
     division: school.division,
     region: school.region,
@@ -427,7 +462,7 @@ function inferFileExtension(mimeType: string) {
 function toStoredAssetPath(value: string | null | undefined) {
   const trimmedValue = value?.trim() ?? "";
 
-  if (!trimmedValue || trimmedValue.startsWith("data:")) {
+  if (!trimmedValue || trimmedValue.startsWith("data:") || trimmedValue.startsWith("blob:")) {
     return trimmedValue;
   }
 
@@ -468,12 +503,54 @@ export function resolveBackendAssetUrl(value: string | null | undefined) {
     return "";
   }
 
-  if (trimmedValue.startsWith("data:") || /^https?:\/\//i.test(trimmedValue)) {
+  if (trimmedValue.startsWith("data:") || trimmedValue.startsWith("blob:") || /^https?:\/\//i.test(trimmedValue)) {
     return trimmedValue;
   }
 
   const normalizedPath = trimmedValue.startsWith("/") ? trimmedValue : `/${trimmedValue}`;
   return `${getBackendOrigin()}${normalizedPath}`;
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      resolve(typeof reader.result === "string" ? reader.result : "");
+    });
+    reader.addEventListener("error", () => {
+      reject(reader.error ?? new Error("Unable to read image data."));
+    });
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function getAssetDataUrl(value: string | null | undefined, token?: string) {
+  const trimmedValue = value?.trim() ?? "";
+
+  if (!trimmedValue || trimmedValue.startsWith("data:")) {
+    return trimmedValue;
+  }
+
+  if (!requiresAuthenticatedAssetRequest(trimmedValue)) {
+    return resolveBackendAssetUrl(trimmedValue);
+  }
+
+  const authToken = resolveAuthToken(token);
+
+  if (!authToken) {
+    return "";
+  }
+
+  const response = await apiClient.request<Blob>({
+    url: resolveBackendAssetUrl(trimmedValue),
+    method: "GET",
+    responseType: "blob",
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+    },
+  });
+
+  return blobToDataUrl(response.data);
 }
 
 async function dataUrlToFile(dataUrl: string, fileBaseName = "profile-picture") {
@@ -922,6 +999,14 @@ function mapSchoolSettingsPayloadToBackend(payload: Record<string, unknown>) {
     backendPayload.schoolName = toNullableString(payload.school_name);
   }
 
+  if ("school_email" in payload) {
+    backendPayload.schoolEmail = toNullableString(payload.school_email);
+  }
+
+  if ("school_number" in payload) {
+    backendPayload.schoolNumber = toNullableString(payload.school_number);
+  }
+
   if ("district" in payload) {
     backendPayload.district = toNullableString(payload.district);
   }
@@ -953,21 +1038,86 @@ function mapSchoolSettingsPayloadToBackend(payload: Record<string, unknown>) {
   return backendPayload;
 }
 
+function mapEmailSmtpSettingsPayloadToBackend(payload: Record<string, unknown>) {
+  return {
+    gmailEmail: toNullableString(payload.gmail_email) ?? "",
+    gmailAppPassword: toNullableString(payload.gmail_app_password) ?? "",
+    smtpSecure: Boolean(payload.smtp_secure),
+    isEnabled: Boolean(payload.is_enabled),
+  };
+}
+
+function mapEmailTemplatePayloadToBackend(payload: Record<string, unknown>) {
+  return {
+    templateKey: payload.template_key,
+    templateName: toNullableString(payload.template_name) ?? "",
+    subject: toNullableString(payload.subject) ?? "",
+    htmlContent: toNullableString(payload.html_content) ?? "",
+    isActive: Boolean(payload.is_active),
+  };
+}
+
 export function toSessionUser(user: AdminUser): SessionUser {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
+    username: user.username,
     roles: user.roles,
     status: user.status,
     created_at: user.created_at,
+    avatar: user.avatar,
+    profile_picture: user.profile_picture,
   };
 }
 
-export function createAuthSession(token: string, user: AdminUser): AuthSessionCookie {
+function mapBackendEmailSmtpSettings(settings: BackendEmailSmtpSettingsResponseDto): EmailSmtpSettings {
+  return {
+    id: settings.id,
+    provider: settings.provider,
+    gmail_email: settings.gmailEmail,
+    gmail_app_password: settings.gmailAppPassword,
+    has_gmail_app_password: settings.hasGmailAppPassword,
+    smtp_host: settings.smtpHost,
+    smtp_port: settings.smtpPort,
+    smtp_secure: settings.smtpSecure,
+    is_enabled: settings.isEnabled,
+    created_at: settings.createdAt,
+    updated_at: settings.updatedAt,
+  };
+}
+
+function mapBackendEmailTemplate(template: BackendEmailTemplateResponseDto): EmailTemplate {
+  return {
+    id: template.id,
+    template_key: template.templateKey,
+    template_name: template.templateName,
+    subject: template.subject,
+    html_content: template.htmlContent,
+    is_active: template.isActive,
+    created_at: template.createdAt,
+    updated_at: template.updatedAt,
+    deleted_at: template.deletedAt,
+  };
+}
+
+function mapBackendPasswordRecoverySettings(
+  settings: BackendPasswordRecoverySettingsResponseDto,
+): PasswordRecoverySettings {
+  return {
+    forgot_password_method: settings.forgotPasswordMethod,
+  };
+}
+
+export function createAuthSession(
+  token: string,
+  user: AdminUser,
+  temporaryPasswordLogin?: AuthSessionCookie["temporaryPasswordLogin"],
+): AuthSessionCookie {
   return {
     token,
     user: toSessionUser(user),
+    temporaryPasswordLogin: temporaryPasswordLogin ?? null,
   };
 }
 
@@ -1006,16 +1156,33 @@ export function parseAuthSessionCookie(value: string | undefined): AuthSessionCo
       return null;
     }
 
+    const temporaryPasswordLogin = parsedValue.temporaryPasswordLogin;
+
     return {
       token: parsedValue.token,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
+        username: typeof user.username === "string" ? user.username : undefined,
         roles: user.roles,
         status: user.status,
         created_at: user.created_at,
+        avatar: typeof user.avatar === "string" ? user.avatar : undefined,
+        profile_picture: typeof user.profile_picture === "string" ? user.profile_picture : undefined,
       },
+      temporaryPasswordLogin:
+        temporaryPasswordLogin &&
+        typeof temporaryPasswordLogin === "object" &&
+        temporaryPasswordLogin.required === true &&
+        typeof temporaryPasswordLogin.recoveryRequestId === "number" &&
+        typeof temporaryPasswordLogin.expiresAt === "string"
+          ? {
+              required: true,
+              recoveryRequestId: temporaryPasswordLogin.recoveryRequestId,
+              expiresAt: temporaryPasswordLogin.expiresAt,
+            }
+          : null,
     };
   } catch {
     return null;
@@ -1130,21 +1297,93 @@ export async function requestAuthenticatedApi<T>(
   });
 }
 
-export async function login(email: string, password: string) {
+export async function login(identifier: string, password: string) {
   const result = await requestApi<BackendAuthResponseDto>("/auth/login", {
     method: "POST",
     body: {
-      email,
+      identifier,
+      email: identifier,
+      username: identifier,
       password,
     },
   });
 
   const user = mapBackendUserToAdminUser(result.user);
-  setClientAuthSession(createAuthSession(result.token, user));
+  setClientAuthSession(createAuthSession(result.token, user, result.temporaryPasswordLogin));
 
   return {
     token: result.token,
     user,
+    temporaryPasswordLogin: result.temporaryPasswordLogin,
+  };
+}
+
+export async function forgotPassword(identifier: string) {
+  return requestApi<BackendForgotPasswordResponseDto>("/auth/forgot-password", {
+    method: "POST",
+    body: {
+      identifier,
+      email: identifier,
+      username: identifier,
+    },
+  });
+}
+
+export async function verifyForgotPasswordOtp(payload: {
+  recoveryRequestId: number;
+  email: string;
+  otpCode: string;
+}) {
+  const result = await requestApi<BackendAuthResponseDto>("/auth/forgot-password/otp/verify", {
+    method: "POST",
+    body: payload,
+  });
+  const user = mapBackendUserToAdminUser(result.user);
+  setClientAuthSession(createAuthSession(result.token, user, result.temporaryPasswordLogin));
+
+  return {
+    token: result.token,
+    user,
+    temporaryPasswordLogin: result.temporaryPasswordLogin,
+  };
+}
+
+export async function getTemporaryPasswordSession(recoveryRequestId: number, token?: string) {
+  const result = await requestAuthenticatedApi<{
+    user: BackendUserResponseDto;
+    temporaryPasswordLogin: NonNullable<AuthSessionCookie["temporaryPasswordLogin"]>;
+  }>(
+    `/auth/temporary-password/${recoveryRequestId}`,
+    { token },
+  );
+  const user = mapBackendUserToAdminUser(result.user);
+
+  return {
+    user,
+    temporaryPasswordLogin: result.temporaryPasswordLogin,
+  };
+}
+
+export async function completeTemporaryPassword(
+  payload: {
+    recoveryRequestId: number;
+    newPassword: string;
+    confirmNewPassword: string;
+  },
+  token?: string,
+) {
+  const result = await requestAuthenticatedApi<BackendAuthResponseDto>("/auth/temporary-password", {
+    method: "PUT",
+    body: payload,
+    token,
+  });
+  const user = mapBackendUserToAdminUser(result.user);
+  setClientAuthSession(createAuthSession(result.token, user, result.temporaryPasswordLogin));
+
+  return {
+    token: result.token,
+    user,
+    temporaryPasswordLogin: result.temporaryPasswordLogin,
   };
 }
 
@@ -1397,11 +1636,48 @@ export async function listPositions(token?: string) {
   return requestAuthenticatedApi<BackendPositionResponseDto[]>("/positions", { token });
 }
 
+export async function listSubjects(token?: string) {
+  const subjects = await requestAuthenticatedApi<BackendSubjectResponseDto[]>("/subjects", { token });
+  return subjects.map(mapBackendSubjectToSubjectRecord);
+}
+
+export async function createSubject(payload: Record<string, unknown>, token?: string) {
+  const subject = await requestAuthenticatedApi<BackendSubjectResponseDto>("/subjects", {
+    method: "POST",
+    body: payload,
+    token,
+  });
+
+  return mapBackendSubjectToSubjectRecord(subject);
+}
+
+export async function updateSubject(subjectId: number, payload: Record<string, unknown>, token?: string) {
+  const subject = await requestAuthenticatedApi<BackendSubjectResponseDto>(`/subjects/${subjectId}`, {
+    method: "PUT",
+    body: payload,
+    token,
+  });
+
+  return mapBackendSubjectToSubjectRecord(subject);
+}
+
+export async function deleteSubject(subjectId: number, token?: string) {
+  await requestAuthenticatedApi(`/subjects/${subjectId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
 export async function getSchoolSettings(token?: string) {
   const school = await requestAuthenticatedApi<BackendSchoolSettingsResponseDto>("/system/school", {
     token,
   });
 
+  return mapBackendSchoolSettings(school);
+}
+
+export async function getPublicSchoolSettings() {
+  const school = await requestApi<BackendSchoolSettingsResponseDto>("/system/school");
   return mapBackendSchoolSettings(school);
 }
 
@@ -1413,6 +1689,101 @@ export async function updateSchoolSettings(payload: Record<string, unknown>, tok
   });
 
   return mapBackendSchoolSettings(school);
+}
+
+export async function getEmailSmtpSettings(token?: string) {
+  const settings = await requestAuthenticatedApi<BackendEmailSmtpSettingsResponseDto>("/system/email/smtp", {
+    token,
+  });
+
+  return mapBackendEmailSmtpSettings(settings);
+}
+
+export async function updateEmailSmtpSettings(payload: Record<string, unknown>, token?: string) {
+  const settings = await requestAuthenticatedApi<BackendEmailSmtpSettingsResponseDto>("/system/email/smtp", {
+    method: "PUT",
+    body: mapEmailSmtpSettingsPayloadToBackend(payload),
+    token,
+  });
+
+  return mapBackendEmailSmtpSettings(settings);
+}
+
+export async function getPasswordRecoverySettings(token?: string) {
+  const settings = await requestAuthenticatedApi<BackendPasswordRecoverySettingsResponseDto>(
+    "/system/password-recovery",
+    { token },
+  );
+
+  return mapBackendPasswordRecoverySettings(settings);
+}
+
+export async function updatePasswordRecoverySettings(
+  forgotPasswordMethod: ForgotPasswordMethod,
+  token?: string,
+) {
+  const settings = await requestAuthenticatedApi<BackendPasswordRecoverySettingsResponseDto>(
+    "/system/password-recovery",
+    {
+      method: "PUT",
+      body: { forgotPasswordMethod },
+      token,
+    },
+  );
+
+  return mapBackendPasswordRecoverySettings(settings);
+}
+
+export async function listEmailTemplates(templateKey?: EmailTemplateKey, token?: string) {
+  const query = templateKey ? `?templateKey=${encodeURIComponent(templateKey)}` : "";
+  const templates = await requestAuthenticatedApi<BackendEmailTemplateResponseDto[]>(
+    `/system/email/templates${query}`,
+    { token },
+  );
+
+  return templates.map(mapBackendEmailTemplate);
+}
+
+export async function createEmailTemplate(payload: Record<string, unknown>, token?: string) {
+  const template = await requestAuthenticatedApi<BackendEmailTemplateResponseDto>("/system/email/templates", {
+    method: "POST",
+    body: mapEmailTemplatePayloadToBackend(payload),
+    token,
+  });
+
+  return mapBackendEmailTemplate(template);
+}
+
+export async function updateEmailTemplate(templateId: number, payload: Record<string, unknown>, token?: string) {
+  const template = await requestAuthenticatedApi<BackendEmailTemplateResponseDto>(
+    `/system/email/templates/${templateId}`,
+    {
+      method: "PUT",
+      body: mapEmailTemplatePayloadToBackend(payload),
+      token,
+    },
+  );
+
+  return mapBackendEmailTemplate(template);
+}
+
+export async function activateEmailTemplate(templateId: number, token?: string) {
+  const template = await requestAuthenticatedApi<BackendEmailTemplateResponseDto>(
+    `/system/email/templates/${templateId}/activate`,
+    {
+      method: "PUT",
+      token,
+    },
+  );
+
+  return mapBackendEmailTemplate(template);
+}
+
+export async function deleteEmailTemplate(templateId: number, token?: string) {
+  await requestAuthenticatedApi(`/system/email/templates/${templateId}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 export async function createRole(payload: Record<string, unknown>, token?: string) {

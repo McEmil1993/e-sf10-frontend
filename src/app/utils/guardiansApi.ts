@@ -36,6 +36,16 @@ export function normalizeGuardianRecord(guardian: GuardianRecord): GuardianRecor
   };
 }
 
+function formatGuardianAddress(guardian: GuardianRecord) {
+  const streetAddress = guardian.address.trim();
+  const barangay = guardian.barangay.trim();
+  const municipalityCity = guardian.municipality_city.trim();
+  const province = guardian.province.trim();
+  const cityProvince = [municipalityCity, province].filter(Boolean).join(", ");
+
+  return [streetAddress, barangay, cityProvince].filter(Boolean).join(" ");
+}
+
 export function toGuardianTableRow(guardian: GuardianRecord): GuardianTableRow {
   return {
     id: guardian.id,
@@ -43,7 +53,7 @@ export function toGuardianTableRow(guardian: GuardianRecord): GuardianTableRow {
     avatar: guardian.avatar ?? resolveBackendAssetUrl(guardian.profile_picture) ?? "",
     contact_number: guardian.contact_number,
     location: [guardian.barangay, guardian.municipality_city, guardian.province].filter(Boolean).join(", "),
-    address: guardian.address,
+    address: formatGuardianAddress(guardian),
     created_at: formatDate(guardian.created_at),
     updated_at: formatDate(guardian.updated_at),
   };

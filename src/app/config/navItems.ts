@@ -14,40 +14,28 @@ export const mainNavItems: NavItem[] = [
     description: "View student information",
   },
   {
-    label: "Student Grades",
+    label: "Grades",
     href: "/students/grades",
     icon: "chart",
     description: "View student grades",
   },
   {
-    label: "Student SF10 Records",
+    label: "SF10 Records",
     href: "/students/sf10-records",
     icon: "document",
     description: "View SF10 records",
   },
   {
-    label: "Records Search",
-    href: "/records/search",
+    label: "Guardians",
+    href: "/guardians",
+    icon: "users",
+    description: "Manage guardian records",
+  },
+  {
+    label: "Subjects",
+    href: "/subjects",
     icon: "document",
-    description: "Search records",
-  },
-  {
-    label: "Records Verification",
-    href: "/records/verification",
-    icon: "shield",
-    description: "Verify records",
-  },
-  {
-    label: "Records Archive",
-    href: "/records/archive",
-    icon: "document",
-    description: "Archived records",
-  },
-  {
-    label: "Reports Export / Print",
-    href: "/reports/export-print",
-    icon: "reports",
-    description: "Export or print reports",
+    description: "Manage SF10 subjects",
   },
   {
     label: "Settings",
@@ -65,9 +53,49 @@ export const mainNavItems: NavItem[] = [
         description: "Manage school profile and logos",
       },
       {
-        label: "Guardians",
-        href: "/guardians",
-        description: "Manage guardian records",
+        label: "School Years",
+        href: "/academic/school-years",
+        description: "Manage school year periods",
+      },
+      {
+        label: "Teachers / Advisers",
+        href: "/academic/teachers",
+        description: "Manage teachers and advisers",
+      },
+      {
+        label: "Sections",
+        href: "/academic/sections",
+        description: "Manage grade sections",
+      },
+      {
+        label: "Scholastic Records",
+        href: "/academic/scholastic-records",
+        description: "Manage SF10 scholastic records",
+      },
+      {
+        label: "Remedial Classes",
+        href: "/academic/remedial-classes",
+        description: "Manage remedial records",
+      },
+      {
+        label: "Eligibility Records",
+        href: "/academic/eligibility-records",
+        description: "Manage eligibility records",
+      },
+      {
+        label: "Certifications",
+        href: "/academic/certifications",
+        description: "Manage SF10 certifications",
+      },
+      {
+        label: "Records Archive",
+        href: "/records/archive",
+        description: "Archived records",
+      },
+      {
+        label: "Reports Export / Print",
+        href: "/reports/export-print",
+        description: "Export or print reports",
       },
       {
         label: "Roles & Permissions",
@@ -83,11 +111,6 @@ export const mainNavItems: NavItem[] = [
         label: "Notifications",
         href: "/notifications",
         description: "Manage system notifications",
-      },
-      {
-        label: "Import Data",
-        href: "/import-data",
-        description: "Upload and import records",
       },
       {
         label: "Backup & Recovery",

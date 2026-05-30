@@ -28,6 +28,23 @@ function getCellValue<T extends Record<string, unknown>>(row: T, key: keyof T | 
   return String(value);
 }
 
+function getCellValues<T extends Record<string, unknown>>(row: T, key: keyof T | string) {
+  const value = getRawValue(row, key);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+
+  if (value === null || value === undefined) {
+    return [];
+  }
+
+  const stringValue = String(value).trim();
+  return stringValue ? [stringValue] : [];
+}
+
 function getInitialLetter(value: string) {
   return value.trim().charAt(0).toUpperCase() || "?";
 }
@@ -116,6 +133,31 @@ function renderCellContent<T extends Record<string, unknown>>(row: T, column: Ta
       <span className={[column.badgeClassName ?? "", toneClassName].join(" ").trim()}>
         {value}
       </span>
+    );
+  }
+
+  if (column.type === "badges") {
+    const values = getCellValues(row, column.key);
+
+    if (values.length === 0) {
+      return "-";
+    }
+
+    return (
+      <div className="flex flex-wrap gap-1.5">
+        {values.map((item, index) => {
+          const toneClassName = column.toneMap?.[item] ?? "";
+
+          return (
+            <span
+              className={[column.badgeClassName ?? "", toneClassName].join(" ").trim()}
+              key={`${item}-${index}`}
+            >
+              {item}
+            </span>
+          );
+        })}
+      </div>
     );
   }
 

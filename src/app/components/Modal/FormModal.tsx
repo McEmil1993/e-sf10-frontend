@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Button from "@/app/components/Button/Button";
 import AuthenticatedImage from "@/app/components/Image/AuthenticatedImage";
 import ImageCropField from "@/app/components/Image/ImageCropField";
@@ -41,11 +43,206 @@ function PlusChipIcon() {
   );
 }
 
+function getSchoolYearStartYear(value: string) {
+  const [startYear] = value.split("-");
+  const parsedYear = Number(startYear);
+
+  if (!Number.isInteger(parsedYear)) {
+    return "";
+  }
+
+  return String(parsedYear);
+}
+
+function getSchoolYearBounds(value: string, yearStart?: number, yearEnd?: number) {
+  const currentYear = new Date().getFullYear();
+  const selectedYear = Number(getSchoolYearStartYear(value));
+
+  return {
+    minYear: yearStart ?? Math.min(currentYear - 20, Number.isInteger(selectedYear) ? selectedYear : currentYear),
+    maxYear: yearEnd ?? Math.max(currentYear + 20, Number.isInteger(selectedYear) ? selectedYear : currentYear),
+  };
+}
+
+function CalendarIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M7 3v3M17 3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function ChevronIcon({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path
+        d={direction === "left" ? "m15 18-6-6 6-6" : "m9 6 6 6-6 6"}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function SchoolYearRangeField({
+  field,
+  inputClassName,
+  isViewMode,
+  onChange,
+  value,
+}: {
+  field: ModalField;
+  inputClassName: string;
+  isViewMode: boolean;
+  onChange: (name: string, fieldValue: string) => void;
+  value: string;
+}) {
+  const currentYear = new Date().getFullYear();
+  const selectedYear = Number(getSchoolYearStartYear(value));
+  const safeSelectedYear = Number.isInteger(selectedYear) ? selectedYear : currentYear;
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [visibleStartYear, setVisibleStartYear] = useState(Math.floor(safeSelectedYear / 12) * 12);
+  const { minYear, maxYear } = getSchoolYearBounds(value, field.yearStart, field.yearEnd);
+  const visibleYears = Array.from({ length: 12 }, (_item, index) => visibleStartYear + index).filter(
+    (year) => year >= minYear && year <= maxYear,
+  );
+  const canGoPrevious = visibleStartYear > minYear;
+  const canGoNext = visibleStartYear + 11 < maxYear;
+
+  useEffect(() => {
+    if (!isPickerOpen) {
+      return undefined;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsPickerOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPickerOpen]);
+
+  const pickerDialog =
+    isPickerOpen && !isViewMode && !field.disabled
+      ? createPortal(
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/30 px-4 py-6">
+            <button
+              aria-label="Close school year picker"
+              className="absolute inset-0 h-full w-full cursor-default"
+              onClick={() => setIsPickerOpen(false)}
+              type="button"
+            />
+            <div className="relative z-[81] w-full max-w-sm rounded-[8px] border border-border bg-card shadow-[0_24px_60px_rgba(15,23,42,0.24)]">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950">Select School Year</h3>
+                  <p className="text-xs text-muted">Pick one start year only.</p>
+                </div>
+                <span className="text-slate-500">
+                  <CalendarIcon />
+                </span>
+              </div>
+              <div className="p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <button
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-border text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!canGoPrevious}
+                    onClick={() => setVisibleStartYear((year) => Math.max(minYear, year - 12))}
+                    type="button"
+                  >
+                    <ChevronIcon direction="left" />
+                  </button>
+                  <span className="text-sm font-semibold text-slate-800">
+                    {visibleStartYear} - {Math.min(visibleStartYear + 11, maxYear)}
+                  </span>
+                  <button
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-[5px] border border-border text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!canGoNext}
+                    onClick={() => setVisibleStartYear((year) => Math.min(maxYear - 11, year + 12))}
+                    type="button"
+                  >
+                    <ChevronIcon direction="right" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {visibleYears.map((year) => {
+                    const isSelected = year === selectedYear;
+
+                    return (
+                      <button
+                        className={[
+                          "h-10 rounded-[5px] border text-sm font-semibold transition",
+                          isSelected
+                            ? "border-primary bg-primary text-white"
+                            : "border-border bg-card text-slate-700 hover:border-primary/40 hover:bg-sky-50 hover:text-primary",
+                        ].join(" ")}
+                        key={year}
+                        onClick={() => {
+                          onChange(field.name, `${year}-${year + 1}`);
+                          setIsPickerOpen(false);
+                        }}
+                        type="button"
+                      >
+                        {year}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-border bg-background/35 px-4 py-3">
+                <span className="text-sm font-semibold text-slate-700">
+                  Result: {value || "None"}
+                </span>
+                <Button onClick={() => setIsPickerOpen(false)} size="sm" variant="secondary">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <div className="relative">
+      <button
+        className={[
+          inputClassName,
+          "flex h-10 items-center justify-between gap-3 text-left",
+          !value ? "text-muted" : "",
+        ].join(" ")}
+        disabled={isViewMode || field.disabled}
+        onClick={() => setIsPickerOpen((currentValue) => !currentValue)}
+        type="button"
+      >
+        <span>{value || field.placeholder || "Select school year"}</span>
+        <span className="shrink-0 text-muted">
+          <CalendarIcon />
+        </span>
+      </button>
+
+      {pickerDialog}
+    </div>
+  );
+}
+
 function renderField(
   field: ModalField,
   isViewMode: boolean,
   value: string,
   onChange: (name: string, fieldValue: string) => void,
+  values: Record<string, string>,
 ) {
   const inputClassName = [
     baseInputClassName,
@@ -86,6 +283,101 @@ function renderField(
           </option>
         ))}
       </select>
+    );
+  }
+
+  if (field.type === "radio-group") {
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {(field.options ?? []).map((option) => {
+          const isChecked = value === option.value;
+          const isDisabled = isViewMode || field.disabled;
+
+          return (
+            <label
+              className={[
+                "flex min-h-10 items-center gap-3 rounded-[6px] border px-3 py-2 text-sm font-semibold transition",
+                isChecked ? "border-primary bg-sky-50 text-primary" : "border-border bg-card text-slate-700",
+                isDisabled ? "cursor-default opacity-75" : "cursor-pointer hover:border-primary/40",
+              ].join(" ")}
+              key={option.value}
+            >
+              <input
+                checked={isChecked}
+                className="h-4 w-4 border-border text-primary focus:ring-primary"
+                disabled={isDisabled}
+                name={field.name}
+                onChange={() => onChange(field.name, option.value)}
+                required={field.required}
+                type="radio"
+                value={option.value}
+              />
+              <span>{option.label}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (field.type === "school-year-range") {
+    return (
+      <SchoolYearRangeField
+        field={field}
+        inputClassName={inputClassName}
+        isViewMode={isViewMode}
+        onChange={onChange}
+        value={value}
+      />
+    );
+  }
+
+  if (field.type === "date-range") {
+    const endName = field.rangeEndName;
+    const endValue = endName ? values[endName] ?? "" : "";
+
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-muted">Start Date</span>
+          <input
+            className={inputClassName}
+            disabled={isViewMode || field.disabled}
+            max={endValue || undefined}
+            name={field.name}
+            onChange={(event) => {
+              const nextStartDate = event.target.value;
+
+              onChange(field.name, nextStartDate);
+
+              if (endName && endValue && nextStartDate && nextStartDate > endValue) {
+                onChange(endName, nextStartDate);
+              }
+            }}
+            readOnly={isViewMode || field.readOnly}
+            required={field.required}
+            type="date"
+            value={value}
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-muted">End Date</span>
+          <input
+            className={inputClassName}
+            disabled={isViewMode || field.disabled || !endName}
+            min={value || undefined}
+            name={endName}
+            onChange={(event) => {
+              if (endName) {
+                onChange(endName, event.target.value);
+              }
+            }}
+            readOnly={isViewMode || field.readOnly}
+            type="date"
+            value={endValue}
+          />
+        </label>
+      </div>
     );
   }
 
@@ -356,7 +648,7 @@ export default function FormModal({
                 {field.label}
               </span>
 
-              {renderField(field, isViewMode, values[field.name] ?? "", onChange)}
+              {renderField(field, isViewMode, values[field.name] ?? "", onChange, values)}
 
               {field.helperText ? (
                 <p className="text-xs text-muted">{field.helperText}</p>

@@ -22,7 +22,7 @@ export default function AuthenticatedImage({
   const trimmedSrc = src.trim();
   const requiresAuth = requiresAuthenticatedAssetRequest(trimmedSrc);
   const [resolvedSrc, setResolvedSrc] = useState("");
-  const [hasError, setHasError] = useState(false);
+  const [failedSrc, setFailedSrc] = useState("");
 
   useEffect(() => {
     if (!trimmedSrc || !requiresAuth) {
@@ -38,7 +38,7 @@ export default function AuthenticatedImage({
       if (!token) {
         if (!isDisposed) {
           setResolvedSrc("");
-          setHasError(true);
+          setFailedSrc(trimmedSrc);
         }
 
         return;
@@ -46,7 +46,7 @@ export default function AuthenticatedImage({
 
       try {
         setResolvedSrc("");
-        setHasError(false);
+        setFailedSrc("");
 
         const response = await apiClient.request<Blob>({
           url: resolveBackendAssetUrl(trimmedSrc),
@@ -65,11 +65,11 @@ export default function AuthenticatedImage({
         }
 
         setResolvedSrc(objectUrl);
-        setHasError(false);
+        setFailedSrc("");
       } catch {
         if (!isDisposed) {
           setResolvedSrc("");
-          setHasError(true);
+          setFailedSrc(trimmedSrc);
         }
       }
     }
@@ -86,10 +86,11 @@ export default function AuthenticatedImage({
   }, [requiresAuth, trimmedSrc]);
 
   const displaySrc = requiresAuth ? resolvedSrc : resolveBackendAssetUrl(trimmedSrc);
+  const hasError = failedSrc === (requiresAuth ? trimmedSrc : displaySrc);
 
   if (!displaySrc || hasError) {
     return <>{fallback}</>;
   }
 
-  return <img alt={alt} className={className} src={displaySrc} />;
+  return <img alt={alt} className={className} onError={() => setFailedSrc(requiresAuth ? trimmedSrc : displaySrc)} src={displaySrc} />;
 }

@@ -35,6 +35,7 @@ export type UserTableRow = {
   email: string;
   avatar?: string;
   role: string;
+  roles: string[];
   position?: string;
   status: string;
   username?: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import Button from "@/app/components/Button/Button";
 import type { LoginFormProps } from "@/app/types/components/loginTypes";
 import { ApiError, login } from "@/app/utils/api";
@@ -37,30 +38,45 @@ function EyeSlashIcon() {
   );
 }
 
+function getLoginErrorField(message: string | null) {
+  if (
+    message === "Username or email is required." ||
+    message === "Username not exist!" ||
+    message === "Email not exist!"
+  ) {
+    return "identifier";
+  }
+
+  if (message === "Password is required." || message === "Wrong password!") {
+    return "password";
+  }
+
+  return null;
+}
+
 export default function LoginForm({
   description = "Sign in to start your session",
   sampleEmails = [],
   title = "E-SF10 Login",
 }: LoginFormProps) {
-  const [emailValue, setEmailValue] = useState("");
+  const [identifierValue, setIdentifierValue] = useState("");
   const [passwordValue, setPasswordValue] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const hasEmailError = errorMessage === "Email is required.";
-  const hasPasswordError =
-    errorMessage === "Password is required." ||
-    errorMessage === "Invalid email or password.";
+  const errorField = getLoginErrorField(errorMessage);
+  const hasIdentifierError = errorField === "identifier";
+  const hasPasswordError = errorField === "password";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const email = emailValue.trim().toLowerCase();
+    const identifier = identifierValue.trim();
     const password = passwordValue.trim();
 
-    if (!email) {
-      setErrorMessage("Email is required.");
+    if (!identifier) {
+      setErrorMessage("Username or email is required.");
       return;
     }
 
@@ -72,21 +88,22 @@ export default function LoginForm({
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
-      const result = await login(email, password);
+      const result = await login(identifier, password);
 
       if (result.user.status !== "active") {
         setErrorMessage("Only active users can sign in.");
         return;
       }
 
+      if (result.temporaryPasswordLogin?.required) {
+        window.location.assign("/set-new-password");
+        return;
+      }
+
       window.location.assign("/dashboard");
     } catch (error) {
       if (error instanceof ApiError) {
-        setErrorMessage(
-          error.status === 401
-            ? "Invalid email or password."
-            : error.message || "Unable to sign in right now.",
-        );
+        setErrorMessage(error.message || "Unable to sign in right now.");
       } else {
         setErrorMessage("Unable to sign in right now.");
       }
@@ -102,35 +119,43 @@ export default function LoginForm({
         <p className="text-sm text-muted">{description}</p>
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-semibold text-slate-700" htmlFor="email">
-          Email
+        <label className="text-sm font-semibold text-slate-700" htmlFor="identifier">
+          Username / Email
         </label>
         <div className="relative">
           <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
             <MailIcon />
           </span>
           <input
-            autoComplete="email"
-            aria-invalid={hasEmailError}
+            autoComplete="username"
+            aria-invalid={hasIdentifierError}
             className={[
               "h-11 w-full rounded-md border bg-white pl-10 pr-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-2",
-              hasEmailError
+              hasIdentifierError
                 ? "border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-rose-100"
                 : "border-border focus:border-primary focus:ring-sky-100",
             ].join(" ")}
-            id="email"
-            name="email"
-            onChange={(event) => setEmailValue(event.target.value)}
-            placeholder="mark@example.com"
-            type="email"
-            value={emailValue}
+            id="identifier"
+            name="identifier"
+            onChange={(event) => setIdentifierValue(event.target.value)}
+            placeholder="username or email"
+            type="text"
+            value={identifierValue}
           />
         </div>
       </div>
       <div className="space-y-2">
-        <label className="text-sm font-semibold text-slate-700" htmlFor="password">
-          Password
-        </label>
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm font-semibold text-slate-700" htmlFor="password">
+            Password
+          </label>
+          <Link
+            className="text-sm font-semibold text-primary transition hover:text-primary-dark"
+            href="/forgot-password"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <div className="relative">
           <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
             <LockIcon />

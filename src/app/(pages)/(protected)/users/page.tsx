@@ -8,6 +8,7 @@ import FormModal from "@/app/components/Modal/FormModal";
 import PagePlaceholder from "@/app/components/PagePlaceholder/PagePlaceholder";
 import Table from "@/app/components/Table/Table";
 import ToastViewport from "@/app/components/Toast/ToastViewport";
+import UserViewModal from "@/app/components/User/UserViewModal";
 import rawBarangays from "@/app/data/barangays.json";
 import rawCitiesMunicipalities from "@/app/data/cities-municipalities.json";
 import rawProvinces from "@/app/data/provinces.json";
@@ -189,7 +190,7 @@ function buildUserFields(
   },
   {
     name: "contact_number",
-    label: "Contact Number",
+    label: "Contact #",
     placeholder: "09171234567",
     helperText: "Enter 10 to 11 digits only.",
     layoutClassName: "md:col-span-6 xl:col-span-4",
@@ -566,6 +567,11 @@ export default function UsersPage() {
     [statusState?.userId, users],
   );
 
+  const viewUser = useMemo(
+    () => users.find((user) => user.id === dialogState?.userId) ?? null,
+    [dialogState?.userId, users],
+  );
+
   const tableUsers: UserTableRow[] = useMemo(
     () => usersResponse.data.map(toUserTableRow),
     [usersResponse.data],
@@ -729,7 +735,7 @@ export default function UsersPage() {
       showToast({
         tone: "error",
         title: "Invalid contact number.",
-        description: "Contact number must be 10 to 11 digits only.",
+        description: "Contact # must be 10 to 11 digits only.",
       });
       return;
     }
@@ -872,25 +878,21 @@ export default function UsersPage() {
       secondaryValueClassName: "text-xs text-muted",
     },
     {
-      key: "email",
-      header: "Email",
-      valueClassName: "text-sm font-medium text-slate-700",
-    },
-    {
       key: "contact_number",
-      header: "Contact Number",
+      header: "Contact #",
       valueClassName: "text-sm text-slate-700",
     },
     {
-      key: "role",
-      header: "Role",
-      type: "badge",
-      badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold",
-      toneMap: roleToneMap,
-    },{
       key: "position",
       header: "Position",
       valueClassName: "text-sm text-slate-700",
+    },
+    {
+      key: "roles",
+      header: "Role",
+      type: "badges",
+      badgeClassName: "inline-flex rounded px-2 py-1 text-xs font-semibold",
+      toneMap: roleToneMap,
     },
     {
       key: "status",
@@ -982,7 +984,7 @@ export default function UsersPage() {
         footerClassName="border-t border-border bg-card px-5 py-4 sm:px-5"
         gridClassName="grid-cols-1 md:grid-cols-6 xl:grid-cols-12 xl:auto-rows-min"
         headerClassName="border-b border-border px-5 py-3.5 sm:px-5"
-        isOpen={Boolean(dialogState)}
+        isOpen={Boolean(dialogState) && dialogState?.mode !== "view"}
         labelClassName="text-[13px] font-semibold text-slate-700"
         mode={dialogState?.mode ?? "view"}
         onChange={handleFieldChange}
@@ -1008,6 +1010,13 @@ export default function UsersPage() {
         }
         titleClassName="text-[17px] font-semibold text-slate-950 sm:text-[18px]"
         values={formValues}
+      />
+
+      <UserViewModal
+        isOpen={dialogState?.mode === "view"}
+        onClose={closeDialog}
+        onEdit={openEditModal}
+        user={viewUser}
       />
 
       <ConfirmModal
