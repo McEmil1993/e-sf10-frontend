@@ -173,15 +173,15 @@ function buildGuardianFields(
   cityMunicipalityOptions: ModalFieldOption[],
   barangayOptions: ModalFieldOption[],
 ): ModalField[] {
+  const sourceField: ModalField = {
+    name: "guardian_source",
+    label: "Guardian Source",
+    type: "select",
+    options: guardianSourceOptions,
+    helperText: "Choose an existing guardian record or add a new one.",
+  };
+
   const baseFields: ModalField[] = [
-    {
-      name: "guardian_source",
-      label: "Guardian Source",
-      type: "select",
-      options: guardianSourceOptions,
-      helperText: "Choose an existing guardian record or add a new one.",
-      layoutClassName: "md:col-span-4 xl:col-span-4",
-    },
     {
       name: "relationship",
       label: "Relationship",
@@ -189,40 +189,39 @@ function buildGuardianFields(
       options: relationshipOptions,
       placeholder: "Guardian",
       required: true,
-      layoutClassName: "md:col-span-4 xl:col-span-4",
     },
     {
       name: "is_primary",
       label: "Primary Contact",
       type: "select",
       options: primaryOptions,
-      layoutClassName: "md:col-span-4 xl:col-span-4",
     },
   ];
 
   if (guardianSource === "existing") {
     return [
+      sourceField,
       ...baseFields,
       {
         name: "guardian_id",
         label: "Existing Guardian",
-        type: "select",
+        type: "lookup",
         options:
           guardianOptions.length > 0
-            ? [{ label: "Select guardian", value: "" }, ...guardianOptions]
-            : [{ label: "No available guardian", value: "" }],
-        placeholder: guardianOptions.length > 0 ? "Select guardian" : "No available guardian",
+            ? guardianOptions
+            : [],
+        placeholder: guardianOptions.length > 0 ? "Search guardian" : "No available guardian",
         helperText:
           guardianOptions.length > 0
             ? "Select a guardian already saved in the guardians table."
             : "No unlinked guardian records are available.",
         disabled: guardianOptions.length === 0,
-        layoutClassName: "md:col-span-6 xl:col-span-6",
       },
     ];
   }
 
   return [
+    sourceField,
     {
       name: "profile_picture",
       label: "Profile Picture",
@@ -231,7 +230,6 @@ function buildGuardianFields(
       enableImageCrop: true,
       cropShape: "circle",
       cropAspect: 1,
-      layoutClassName: "md:col-span-6 xl:col-span-6",
     },
     ...baseFields,
     {
@@ -239,20 +237,17 @@ function buildGuardianFields(
       label: "First Name",
       placeholder: "Maria",
       required: true,
-      layoutClassName: "md:col-span-3 xl:col-span-3",
     },
     {
       name: "middle_name",
       label: "Middle Name",
       placeholder: "Santos",
-      layoutClassName: "md:col-span-3 xl:col-span-3",
     },
     {
       name: "last_name",
       label: "Last Name",
       placeholder: "Dela Cruz",
       required: true,
-      layoutClassName: "md:col-span-3 xl:col-span-3",
     },
     {
       name: "suffix",
@@ -260,7 +255,6 @@ function buildGuardianFields(
       placeholder: "Sr.",
       type: "lookup",
       options: suffixOptions,
-      layoutClassName: "md:col-span-3 xl:col-span-2",
     },
     {
       name: "contact_number",
@@ -268,7 +262,6 @@ function buildGuardianFields(
       placeholder: "09171234567",
       required: true,
       helperText: "Enter 7 to 20 digits only.",
-      layoutClassName: "md:col-span-3 xl:col-span-4",
     },
     {
       name: "region",
@@ -276,7 +269,6 @@ function buildGuardianFields(
       type: "lookup",
       options: regionOptions,
       placeholder: "Region VII",
-      layoutClassName: "md:col-span-6 xl:col-span-4",
     },
     {
       name: "province",
@@ -284,7 +276,6 @@ function buildGuardianFields(
       type: "lookup",
       options: provinceOptions,
       placeholder: "Cebu",
-      layoutClassName: "md:col-span-6 xl:col-span-4",
     },
     {
       name: "municipality_city",
@@ -292,7 +283,6 @@ function buildGuardianFields(
       type: "lookup",
       options: cityMunicipalityOptions,
       placeholder: "Talisay City",
-      layoutClassName: "md:col-span-6 xl:col-span-4",
     },
     {
       name: "barangay",
@@ -300,14 +290,12 @@ function buildGuardianFields(
       type: "lookup",
       options: barangayOptions,
       placeholder: "San Isidro",
-      layoutClassName: "md:col-span-6 xl:col-span-4",
     },
     {
       name: "address",
       label: "Address",
       placeholder: "Street and house details",
       required: true,
-      layoutClassName: "md:col-span-6 xl:col-span-4",
     },
   ];
 }
@@ -842,14 +830,12 @@ export default function StudentDetailView({ studentId }: StudentDetailViewProps)
       )}
 
       <FormModal
-        showBodyDivider={true}
-        dividerAfterIndex={0}
         bodyClassName="px-5 py-5 sm:px-5 sm:py-5"
         columns={3}
         fields={guardianFields}
         fieldClassName="space-y-1"
         footerClassName="border-t border-border bg-card px-5 py-4 sm:px-5"
-        gridClassName="grid-cols-1 md:grid-cols-6 xl:grid-cols-12 xl:auto-rows-min"
+        gridClassName="grid-cols-1"
         headerClassName="border-b border-border px-5 py-3.5 sm:px-5"
         isOpen={isGuardianModalOpen}
         labelClassName="text-[13px] font-semibold text-slate-700"
@@ -858,7 +844,7 @@ export default function StudentDetailView({ studentId }: StudentDetailViewProps)
         onClose={closeGuardianModal}
         onSubmit={handleAddGuardian}
         panelClassName="rounded-[6px] border border-border bg-card shadow-[0_14px_38px_rgba(15,23,42,0.14)]"
-        size="modal-large"
+        size="sm"
         submitLabel={isSubmitting ? "Saving..." : "Save Guardian"}
         title="Add Guardian"
         titleClassName="text-[17px] font-semibold text-slate-950 sm:text-[18px]"

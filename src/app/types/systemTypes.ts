@@ -82,3 +82,10 @@ export type EmailTemplateFormValues = {
 export type PasswordRecoverySettings = {
   forgot_password_method: ForgotPasswordMethod;
 };
+
+export type PrincipalSettings = {
+  active_principal_user_id: number | null;
+  active_principal_name: string | null;
+  active_principal_email: string | null;
+  active_principal_position: string | null;
+};

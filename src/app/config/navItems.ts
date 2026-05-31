@@ -8,6 +8,12 @@ export const mainNavItems: NavItem[] = [
     description: "Overview and summary",
   },
   {
+    label: "Enrollments",
+    icon: "users",
+    href: "/academic/enrollments",
+    description: "Assign students to sections",
+  },
+  {
     label: "Student Information",
     href: "/students/information",
     icon: "users",
@@ -18,6 +24,12 @@ export const mainNavItems: NavItem[] = [
     href: "/students/grades",
     icon: "chart",
     description: "View student grades",
+  },
+  {
+    label: "Teachers / Advisers",
+    href: "/academic/teachers",
+    icon: "users",
+    description: "Manage teachers and advisers",
   },
   {
     label: "SF10 Records",
@@ -58,35 +70,30 @@ export const mainNavItems: NavItem[] = [
         description: "Manage school year periods",
       },
       {
-        label: "Teachers / Advisers",
-        href: "/academic/teachers",
-        description: "Manage teachers and advisers",
-      },
-      {
         label: "Sections",
         href: "/academic/sections",
         description: "Manage grade sections",
       },
-      {
-        label: "Scholastic Records",
-        href: "/academic/scholastic-records",
-        description: "Manage SF10 scholastic records",
-      },
-      {
-        label: "Remedial Classes",
-        href: "/academic/remedial-classes",
-        description: "Manage remedial records",
-      },
-      {
-        label: "Eligibility Records",
-        href: "/academic/eligibility-records",
-        description: "Manage eligibility records",
-      },
-      {
-        label: "Certifications",
-        href: "/academic/certifications",
-        description: "Manage SF10 certifications",
-      },
+      // {
+      //   label: "Scholastic Records",
+      //   href: "/academic/scholastic-records",
+      //   description: "Manage SF10 scholastic records",
+      // },
+      // {
+      //   label: "Remedial Classes",
+      //   href: "/academic/remedial-classes",
+      //   description: "Manage remedial records",
+      // },
+      // {
+      //   label: "Eligibility Records",
+      //   href: "/academic/eligibility-records",
+      //   description: "Manage eligibility records",
+      // },
+      // {
+      //   label: "Certifications",
+      //   href: "/academic/certifications",
+      //   description: "Manage SF10 certifications",
+      // },
       {
         label: "Records Archive",
         href: "/records/archive",

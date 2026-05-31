@@ -8,6 +8,7 @@ export type AcademicEntityKey =
   | "school-years"
   | "teachers"
   | "sections"
+  | "enrollments"
   | "sf10-records"
   | "scholastic-records"
   | "grades"
@@ -16,7 +17,7 @@ export type AcademicEntityKey =
   | "certifications";
 
 export type AcademicValueType = "string" | "number" | "boolean" | "date" | "datetime";
-export type AcademicLookupSource = "teaching-users";
+export type AcademicLookupSource = "school-years" | "teachers" | "teaching-users" | "students" | "sections";
 
 export type AcademicRecord = Record<string, unknown> & {
   id: number;
@@ -42,6 +43,10 @@ export type AcademicFieldConfig = {
   rangeEndName?: string;
   yearStart?: number;
   yearEnd?: number;
+  visibleWhen?: {
+    name: string;
+    value: string;
+  };
 };
 
 export type AcademicCrudConfig = {
@@ -54,5 +59,6 @@ export type AcademicCrudConfig = {
   modalSize?: ModalSize;
   modalColumns?: 1 | 2 | 3;
   modalGridClassName?: string;
+  showUpdatedColumn?: boolean;
   fields: AcademicFieldConfig[];
 };

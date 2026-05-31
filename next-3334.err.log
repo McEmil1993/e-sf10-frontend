@@ -1,8 +1,0 @@
-⨯ Another next dev server is already running.
-
-- Local:        http://localhost:3333
-- PID:          14836
-- Dir:          C:\Users\Mark Emil Dacoylo\Documents\TMC\E-SF10\frontend
-- Log:          .next\dev\logs\next-development.log
-
-Run taskkill /PID 14836 /F to stop it.

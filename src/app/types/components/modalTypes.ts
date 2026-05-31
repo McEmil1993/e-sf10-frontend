@@ -53,6 +53,10 @@ export type ModalField = {
   rangeEndName?: string;
   yearStart?: number;
   yearEnd?: number;
+  visibleWhen?: {
+    name: string;
+    value: string;
+  };
 };
 
 export type ModalProps = {

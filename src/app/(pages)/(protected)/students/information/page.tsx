@@ -806,16 +806,6 @@ export default function StudentsInformationPage() {
       toneMap: statusToneMap,
     },
     {
-      key: "created_at",
-      header: "Created",
-      valueClassName: "text-sm text-slate-600",
-    },
-    {
-      key: "updated_at",
-      header: "Updated",
-      valueClassName: "text-sm text-slate-600",
-    },
-    {
       key: "actions",
       header: "Actions",
       type: "actions",

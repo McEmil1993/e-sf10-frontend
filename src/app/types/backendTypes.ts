@@ -230,3 +230,10 @@ export type BackendEmailTemplateResponseDto = {
 export type BackendPasswordRecoverySettingsResponseDto = {
   forgotPasswordMethod: "temporary_password" | "otp_email";
 };
+
+export type BackendPrincipalSettingsResponseDto = {
+  activePrincipalUserId: number | null;
+  activePrincipalName: string | null;
+  activePrincipalEmail: string | null;
+  activePrincipalPosition: string | null;
+};

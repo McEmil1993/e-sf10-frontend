@@ -2,13 +2,21 @@
 
 import AuthenticatedImage from "@/app/components/Image/AuthenticatedImage";
 import { EditIcon } from "@/app/components/Icon/UserActionIcons";
-import ViewDetailsModal, { type ViewDetailsSectionItem } from "@/app/components/Modal/ViewDetailsModal";
+import ViewDetailsModal, {
+  type ViewDetailsFieldItem,
+  type ViewDetailsSectionItem,
+} from "@/app/components/Modal/ViewDetailsModal";
 import { buildRoleToneMap, formatDate, getStatusTone } from "@/app/lib/display";
 import type { AdminUser } from "@/app/types/userTypes";
 
 type UserViewModalProps = {
   isOpen: boolean;
+  title?: string;
   user: AdminUser | null;
+  basicInformationExtraFields?: ViewDetailsFieldItem[];
+  detailSectionsAfterBasic?: ViewDetailsSectionItem[];
+  sidebarInfoItems?: ViewDetailsFieldItem[] | null;
+  sidebarInfoTitle?: string;
   onClose: () => void;
   onEdit?: (userId: number) => void;
 };
@@ -23,6 +31,20 @@ function formatLabel(value: string) {
 
 function displayValue(value: string | null | undefined) {
   return value?.trim() || "-";
+}
+
+function formatAddress(user: AdminUser) {
+  const streetAddress = user.address?.trim() ?? "";
+  const barangay = user.barangay?.trim() ?? "";
+  const municipalityCity = user.municipality_city?.trim() ?? "";
+  const province = user.province?.trim() ?? "";
+  const localAddress = [streetAddress, barangay, municipalityCity].filter(Boolean).join(" ");
+
+  if (localAddress && province) {
+    return `${localAddress}, ${province}`;
+  }
+
+  return localAddress || province || "-";
 }
 
 function safeFormatDate(value: string | null | undefined) {
@@ -75,14 +97,23 @@ function UserAvatarPreview({ user }: { user: AdminUser }) {
 
 function UserProfileSidebar({
   onEdit,
+  sidebarInfoItems,
+  sidebarInfoTitle = "Account",
   user,
 }: {
   user: AdminUser;
+  sidebarInfoItems?: ViewDetailsFieldItem[] | null;
+  sidebarInfoTitle?: string;
   onEdit?: () => void;
 }) {
   const roles = user.roles.length > 0 ? user.roles : ["user"];
   const roleToneMap = buildRoleToneMap(roles);
   const statusTone = getStatusTone(user.status);
+  const infoItems = sidebarInfoItems === null ? [] : sidebarInfoItems ?? [
+    { label: "Username", value: displayValue(user.username) },
+    { label: "Email", value: displayValue(user.email), valueClassName: "break-words" },
+    { label: "Joined", value: safeFormatDate(user.created_at) },
+  ];
 
   return (
     <section className="overflow-hidden rounded-[5px] border border-border bg-card shadow-sm">
@@ -92,14 +123,16 @@ function UserProfileSidebar({
             <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">Profile Overview</p>
             <h3 className="mt-3 text-base font-semibold text-slate-950">Personal Card</h3>
           </div>
-          <button
-            className="inline-flex h-8 items-center gap-2 rounded-[5px] border border-border bg-card px-3 text-xs font-semibold text-slate-700 transition hover:border-primary/40 hover:text-primary"
-            onClick={onEdit}
-            type="button"
-          >
-            <EditIcon />
-            Edit
-          </button>
+          {onEdit ? (
+            <button
+              className="inline-flex h-8 items-center gap-2 rounded-[5px] border border-border bg-card px-3 text-xs font-semibold text-slate-700 transition hover:border-primary/40 hover:text-primary"
+              onClick={onEdit}
+              type="button"
+            >
+              <EditIcon />
+              Edit
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-6">
@@ -132,29 +165,38 @@ function UserProfileSidebar({
         </div>
       </div>
 
-      <div className="border-t border-border bg-slate-50 p-5">
-        <div className="rounded-[5px] border border-border bg-slate-100 p-4">
-          <div className="space-y-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">Username</p>
-              <p className="mt-2 text-sm font-semibold text-slate-950">{displayValue(user.username)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">Email</p>
-              <p className="mt-2 break-words text-sm font-semibold text-slate-950">{displayValue(user.email)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">Joined</p>
-              <p className="mt-2 text-sm font-semibold text-slate-950">{safeFormatDate(user.created_at)}</p>
+      {infoItems.length > 0 ? (
+        <div className="border-t border-border bg-slate-50 p-5">
+          <div className="rounded-[5px] border border-border bg-slate-100 p-4">
+            <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">{sidebarInfoTitle}</p>
+            <div className="space-y-4">
+              {infoItems.map((item) => (
+                <div key={item.label}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">{item.label}</p>
+                  <div className={["mt-2 text-sm font-semibold text-slate-950", item.valueClassName ?? ""].join(" ")}>
+                    {item.value || "-"}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }
 
-export default function UserViewModal({ isOpen, onClose, onEdit, user }: UserViewModalProps) {
+export default function UserViewModal({
+  basicInformationExtraFields,
+  detailSectionsAfterBasic,
+  isOpen,
+  onClose,
+  onEdit,
+  sidebarInfoItems,
+  sidebarInfoTitle,
+  title = "View User",
+  user,
+}: UserViewModalProps) {
   if (!user) {
     return null;
   }
@@ -167,24 +209,15 @@ export default function UserViewModal({ isOpen, onClose, onEdit, user }: UserVie
       action: <EditSectionButton onClick={handleEdit} />,
       columns: 2,
       fields: [
-        { label: "Full Name", value: displayValue(user.name) },
         { label: "Sex", value: formatLabel(displayValue(user.sex)) },
         { label: "Email", value: displayValue(user.email), valueClassName: "break-words" },
         { label: "Contact Number", value: displayValue(user.contact_number) },
+        ...(basicInformationExtraFields ?? [
+          { label: "Address", value: formatAddress(user), colSpan: "full" as const },
+        ]),
       ],
     },
-    {
-      title: "Address",
-      action: <EditSectionButton onClick={handleEdit} />,
-      columns: 4,
-      fields: [
-        { label: "Region", value: displayValue(user.region) },
-        { label: "Province", value: displayValue(user.province) },
-        { label: "Municipality / City", value: displayValue(user.municipality_city) },
-        { label: "Barangay", value: displayValue(user.barangay) },
-        { label: "Address", value: displayValue(user.address), colSpan: "full" },
-      ],
-    },
+    ...(detailSectionsAfterBasic ?? []),
   ];
 
   return (
@@ -192,8 +225,15 @@ export default function UserViewModal({ isOpen, onClose, onEdit, user }: UserVie
       isOpen={isOpen}
       onClose={onClose}
       sections={sections}
-      sidebar={<UserProfileSidebar onEdit={handleEdit} user={user} />}
-      title="View User"
+      sidebar={
+        <UserProfileSidebar
+          onEdit={handleEdit}
+          sidebarInfoItems={sidebarInfoItems}
+          sidebarInfoTitle={sidebarInfoTitle}
+          user={user}
+        />
+      }
+      title={title}
     />
   );
 }

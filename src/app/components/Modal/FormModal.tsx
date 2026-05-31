@@ -21,6 +21,14 @@ const baseInputClassName =
   "w-full rounded-[6px] border border-border bg-card text-foreground shadow-[inset_0_1px_2px_rgba(15,23,42,0.02)] placeholder:text-muted outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15";
 const disabledInputClassName = "cursor-default bg-background text-muted";
 
+function isFieldVisible(field: ModalField, values: Record<string, string>) {
+  if (!field.visibleWhen) {
+    return true;
+  }
+
+  return values[field.visibleWhen.name] === field.visibleWhen.value;
+}
+
 function CheckChipIcon() {
   return (
     <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16">
@@ -277,6 +285,7 @@ function renderField(
         onChange={(event) => onChange(field.name, event.target.value)}
         value={value}
       >
+        {field.placeholder ? <option value="">{field.placeholder}</option> : null}
         {(field.options ?? []).map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -606,6 +615,7 @@ export default function FormModal({
   const resolvedGridClassName =
     gridClassName ??
     (columns === 3 ? "md:grid-cols-2 xl:grid-cols-3" : columns === 2 ? "md:grid-cols-2" : "grid-cols-1");
+  const visibleFields = fields.filter((field) => isFieldVisible(field, values));
 
   return (
     <Modal
@@ -629,7 +639,7 @@ export default function FormModal({
       titleClassName={titleClassName}
     >
       <div className={["grid gap-x-4 gap-y-3.5", resolvedGridClassName].join(" ")}>
-        {fields.map((field, index) => (
+        {visibleFields.map((field, index) => (
           <div key={field.name} className="contents">
             
             {/* FIELD */}

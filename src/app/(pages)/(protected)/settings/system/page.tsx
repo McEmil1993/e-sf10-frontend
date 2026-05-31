@@ -21,20 +21,26 @@ import type {
   EmailTemplateKey,
   ForgotPasswordMethod,
   PasswordRecoverySettings,
+  PrincipalSettings,
   SchoolSettings,
   SchoolSettingsFormValues,
 } from "@/app/types/systemTypes";
+import type { AdminUser } from "@/app/types/userTypes";
 import {
   activateEmailTemplate,
   createEmailTemplate,
   deleteEmailTemplate,
   getEmailSmtpSettings,
   getPasswordRecoverySettings,
+  getPrincipalSettings,
   getSchoolSettings,
   listEmailTemplates,
+  listPositions,
+  listUsers,
   updateEmailSmtpSettings,
   updateEmailTemplate,
   updatePasswordRecoverySettings,
+  updatePrincipalSettings,
   updateSchoolSettings,
   uploadFile,
 } from "@/app/utils/api";
@@ -369,6 +375,49 @@ function buildSchoolAddress(values: SchoolSettingsFormValues) {
     .join(", ");
 }
 
+function normalizeLookupText(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function buildPrincipalOptions(
+  users: AdminUser[],
+  positions: Awaited<ReturnType<typeof listPositions>>,
+  principalSettings: PrincipalSettings,
+): ModalFieldOption[] {
+  const schoolAdministrationPositions = new Set(
+    positions
+      .filter((position) => {
+        const category = normalizeLookupText(position.category);
+        const acronym = normalizeLookupText(position.acronym);
+        const fullPosition = normalizeLookupText(position.fullPosition);
+
+        return category === "school administration" || acronym.includes("principal") || fullPosition.includes("principal");
+      })
+      .flatMap((position) => [normalizeLookupText(position.acronym), normalizeLookupText(position.fullPosition)])
+      .filter(Boolean),
+  );
+  const activePrincipalUserId = principalSettings.active_principal_user_id;
+
+  return users
+    .filter((user) => {
+      if (user.status !== "active") {
+        return false;
+      }
+
+      if (activePrincipalUserId !== null && user.id === activePrincipalUserId) {
+        return true;
+      }
+
+      const userPosition = normalizeLookupText(user.position);
+      return userPosition.includes("principal") || schoolAdministrationPositions.has(userPosition);
+    })
+    .map((user) => ({
+      label: [user.name, user.position, user.email].filter(Boolean).join(" - "),
+      value: String(user.id),
+    }))
+    .sort((firstOption, secondOption) => firstOption.label.localeCompare(secondOption.label));
+}
+
 function toFormValues(school: SchoolSettings): SchoolSettingsFormValues {
   const addressValues = parseSchoolAddress(school.address, school.region);
 
@@ -652,6 +701,14 @@ export default function SystemSettingsPage() {
   const [passwordRecoverySettings, setPasswordRecoverySettings] = useState<PasswordRecoverySettings>({
     forgot_password_method: "temporary_password",
   });
+  const [principalSettings, setPrincipalSettings] = useState<PrincipalSettings>({
+    active_principal_user_id: null,
+    active_principal_name: null,
+    active_principal_email: null,
+    active_principal_position: null,
+  });
+  const [principalUserId, setPrincipalUserId] = useState("");
+  const [principalOptions, setPrincipalOptions] = useState<ModalFieldOption[]>([]);
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
   const [activeTemplateKey, setActiveTemplateKey] = useState<EmailTemplateKey>("password_recovery");
   const [templateFormValues, setTemplateFormValues] = useState<EmailTemplateFormValues>(
@@ -664,6 +721,7 @@ export default function SystemSettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingSmtp, setIsSavingSmtp] = useState(false);
   const [isSavingPasswordRecovery, setIsSavingPasswordRecovery] = useState(false);
+  const [isSavingPrincipal, setIsSavingPrincipal] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
@@ -747,17 +805,31 @@ export default function SystemSettingsPage() {
       setIsLoading(true);
 
       try {
-        const [schoolResponse, smtpResponse, passwordRecoveryResponse, templateResponse] = await Promise.all([
+        const [
+          schoolResponse,
+          smtpResponse,
+          passwordRecoveryResponse,
+          principalResponse,
+          templateResponse,
+          userResponse,
+          positionResponse,
+        ] = await Promise.all([
           getSchoolSettings(),
           getEmailSmtpSettings(),
           getPasswordRecoverySettings(),
+          getPrincipalSettings(),
           listEmailTemplates(),
+          listUsers(),
+          listPositions(),
         ]);
         setSchool(schoolResponse);
         setFormValues(toFormValues(schoolResponse));
         setSmtpSettings(smtpResponse);
         setSmtpFormValues(toSmtpFormValues(smtpResponse));
         setPasswordRecoverySettings(passwordRecoveryResponse);
+        setPrincipalSettings(principalResponse);
+        setPrincipalUserId(principalResponse.active_principal_user_id ? String(principalResponse.active_principal_user_id) : "");
+        setPrincipalOptions(buildPrincipalOptions(userResponse, positionResponse, principalResponse));
         setEmailTemplates(templateResponse);
       } catch (error) {
         showToast({
@@ -1001,6 +1073,45 @@ export default function SystemSettingsPage() {
     }
   }
 
+  async function handlePrincipalSave() {
+    const selectedPrincipalUserId = principalUserId.trim() ? Number(principalUserId) : null;
+
+    if (
+      selectedPrincipalUserId !== null &&
+      (!Number.isInteger(selectedPrincipalUserId) || selectedPrincipalUserId <= 0)
+    ) {
+      showToast({
+        title: "Select a valid principal",
+        description: "Choose a principal from the lookup list.",
+        tone: "error",
+      });
+      return;
+    }
+
+    setIsSavingPrincipal(true);
+
+    try {
+      const updatedSettings = await updatePrincipalSettings(selectedPrincipalUserId);
+      setPrincipalSettings(updatedSettings);
+      setPrincipalUserId(updatedSettings.active_principal_user_id ? String(updatedSettings.active_principal_user_id) : "");
+      showToast({
+        title: "Principal setting updated",
+        description: updatedSettings.active_principal_name
+          ? `${updatedSettings.active_principal_name} is now the active principal.`
+          : "No active principal is selected.",
+        tone: "success",
+      });
+    } catch (error) {
+      showToast({
+        title: "Unable to save principal setting",
+        description: getErrorMessage(error),
+        tone: "error",
+      });
+    } finally {
+      setIsSavingPrincipal(false);
+    }
+  }
+
   async function refreshTemplates(templateKey = activeTemplateKey) {
     const templates = await listEmailTemplates();
     setEmailTemplates(templates);
@@ -1084,6 +1195,7 @@ export default function SystemSettingsPage() {
   }
 
   const isBusy = isLoading || isSaving;
+  const isPrincipalSettingsBusy = isLoading || isSavingPrincipal;
   const isEmailSettingsBusy = isLoading || isSavingSmtp || isSavingPasswordRecovery || isSavingTemplate;
   const activeTemplates = emailTemplates.filter((template) => template.template_key === activeTemplateKey);
 
@@ -1250,6 +1362,51 @@ export default function SystemSettingsPage() {
               />
             ))}
           </div>
+        </section>
+
+        <section className="rounded-[5px] border border-border bg-card p-5 shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Principal Settings</h2>
+              <p className="mt-1 text-sm text-muted">Select the active principal used for official school records.</p>
+            </div>
+            <Button disabled={isPrincipalSettingsBusy} onClick={handlePrincipalSave} type="button">
+              {isSavingPrincipal ? "Saving" : "Save Principal"}
+            </Button>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="text-sm font-semibold text-slate-700">Active Principal</span>
+              <LookupField
+                disabled={isPrincipalSettingsBusy}
+                onChange={setPrincipalUserId}
+                options={principalOptions}
+                placeholder="Search principal or school administrator"
+                value={principalUserId}
+              />
+            </label>
+
+            <div className="rounded-[5px] border border-border bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">Current Principal</p>
+              <p className="mt-2 text-sm font-semibold text-slate-950">
+                {principalSettings.active_principal_name ?? "-"}
+              </p>
+              {principalSettings.active_principal_position || principalSettings.active_principal_email ? (
+                <p className="mt-1 text-xs text-muted">
+                  {[principalSettings.active_principal_position, principalSettings.active_principal_email]
+                    .filter(Boolean)
+                    .join(" - ")}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {principalOptions.length === 0 ? (
+            <p className="mt-3 text-sm text-amber-700">
+              No active principal or school administrator user found. Add or update a user position first.
+            </p>
+          ) : null}
         </section>
 
         <section className="rounded-[5px] border border-border bg-card p-5 shadow-sm">

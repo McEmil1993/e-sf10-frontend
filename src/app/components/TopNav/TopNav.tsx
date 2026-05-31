@@ -5,12 +5,15 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import AuthenticatedImage from "@/app/components/Image/AuthenticatedImage";
 import UserAvatar from "@/app/components/User/UserAvatar";
+import { activeSchoolYearChangedEvent, schoolSettingsUpdatedEvent } from "@/app/constants/events";
 import logoWhite from "@/app/logo-white.png";
+import type { AcademicRecord } from "@/app/types/academicTypes";
 import type { SchoolSettings } from "@/app/types/systemTypes";
 import type {
   NavUtilityIconProps,
   TopNavProps,
 } from "@/app/types/components/topNavTypes";
+import { listAcademicRecords, updateAcademicRecord } from "@/app/utils/academicApi";
 import { getAssetDataUrl, getSchoolSettings, logout } from "@/app/utils/api";
 import {
   cacheSchoolBranding,
@@ -18,8 +21,6 @@ import {
   readCachedSchoolBranding,
   toSchoolBranding,
 } from "@/app/utils/schoolBranding";
-
-const schoolSettingsUpdatedEvent = "school-settings-updated";
 
 function NavUtilityIcon({ type }: NavUtilityIconProps) {
   const className = "h-7 w-7";
@@ -47,9 +48,26 @@ function NavUtilityIcon({ type }: NavUtilityIconProps) {
   );
 }
 
+function isActiveSchoolYear(record: AcademicRecord) {
+  return record.isActive === true || record.isActive === 1 || record.isActive === "true";
+}
+
+function sortSchoolYears(records: AcademicRecord[]) {
+  return records
+    .slice()
+    .sort((firstRecord, secondRecord) => {
+      const firstName = String(firstRecord.name ?? "");
+      const secondName = String(secondRecord.name ?? "");
+      return secondName.localeCompare(firstName);
+    });
+}
+
 export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNavProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isSchoolYearUpdating, setIsSchoolYearUpdating] = useState(false);
+  const [schoolYears, setSchoolYears] = useState<AcademicRecord[]>([]);
+  const [activeSchoolYearId, setActiveSchoolYearId] = useState("");
   const [schoolSettings, setSchoolSettings] = useState<SchoolSettings | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const schoolLogo = schoolSettings?.school_logo.trim() ?? "";
@@ -142,6 +160,57 @@ export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNa
   }, []);
 
   useEffect(() => {
+    let isDisposed = false;
+
+    async function loadSchoolYears() {
+      try {
+        const records = sortSchoolYears(await listAcademicRecords("school-years"));
+        const activeRecord = records.find(isActiveSchoolYear);
+
+        if (!isDisposed) {
+          setSchoolYears(records);
+          setActiveSchoolYearId(activeRecord ? String(activeRecord.id) : "");
+        }
+      } catch {
+        if (!isDisposed) {
+          setSchoolYears([]);
+          setActiveSchoolYearId("");
+        }
+      }
+    }
+
+    function handleActiveSchoolYearChanged(event: Event) {
+      const detail = (event as CustomEvent<AcademicRecord | null>).detail;
+
+      if (detail) {
+        setSchoolYears((currentRecords) =>
+          sortSchoolYears(
+            (currentRecords.some((record) => Number(record.id) === Number(detail.id))
+              ? currentRecords
+              : [...currentRecords, detail]
+            ).map((record) => ({
+                ...record,
+                isActive: Number(record.id) === Number(detail.id),
+              })),
+          ),
+        );
+        setActiveSchoolYearId(String(detail.id));
+        return;
+      }
+
+      void loadSchoolYears();
+    }
+
+    void loadSchoolYears();
+    window.addEventListener(activeSchoolYearChangedEvent, handleActiveSchoolYearChanged);
+
+    return () => {
+      isDisposed = true;
+      window.removeEventListener(activeSchoolYearChangedEvent, handleActiveSchoolYearChanged);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isProfileMenuOpen) {
       return;
     }
@@ -174,6 +243,36 @@ export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNa
       await logout();
     } finally {
       window.location.assign("/login");
+    }
+  }
+
+  async function handleSchoolYearChange(nextSchoolYearId: string) {
+    const selectedSchoolYearId = Number(nextSchoolYearId);
+
+    if (!Number.isInteger(selectedSchoolYearId) || selectedSchoolYearId <= 0) {
+      return;
+    }
+
+    const previousSchoolYearId = activeSchoolYearId;
+    setActiveSchoolYearId(nextSchoolYearId);
+
+    try {
+      setIsSchoolYearUpdating(true);
+      const updatedRecord = await updateAcademicRecord("school-years", selectedSchoolYearId, { isActive: true });
+
+      setSchoolYears((currentRecords) =>
+        sortSchoolYears(
+          currentRecords.map((record) => ({
+            ...record,
+            isActive: Number(record.id) === Number(updatedRecord.id),
+          })),
+        ),
+      );
+      window.dispatchEvent(new CustomEvent(activeSchoolYearChangedEvent, { detail: updatedRecord }));
+    } catch {
+      setActiveSchoolYearId(previousSchoolYearId);
+    } finally {
+      setIsSchoolYearUpdating(false);
     }
   }
 
@@ -260,6 +359,28 @@ export default function TopNav({ isSidebarCollapsed, user, onMenuToggle }: TopNa
           </button>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
+          <label className="hidden items-center gap-2 sm:flex">
+            <span className="sr-only">Active school year</span>
+            <select
+              aria-label="Active school year"
+              className="h-8 max-w-[138px] rounded-sm border border-white/20 bg-black/10 px-2 text-xs font-semibold text-white outline-none transition hover:bg-black/15 focus:border-white/45 disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={isSchoolYearUpdating || schoolYears.length === 0}
+              onChange={(event) => {
+                void handleSchoolYearChange(event.target.value);
+              }}
+              value={activeSchoolYearId}
+            >
+              {schoolYears.length === 0 ? (
+                <option value="">No school year</option>
+              ) : (
+                schoolYears.map((schoolYear) => (
+                  <option className="text-slate-900" key={schoolYear.id} value={String(schoolYear.id)}>
+                    {String(schoolYear.name ?? `SY #${schoolYear.id}`)}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
           <button className="relative hidden h-9 w-9 items-center justify-center rounded-sm transition hover:bg-black/10 sm:inline-flex" type="button">
             <NavUtilityIcon type="bell" />
             <span className="absolute right-1.5 top-1.5 rounded-sm bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white">

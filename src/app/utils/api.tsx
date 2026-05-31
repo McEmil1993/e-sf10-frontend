@@ -9,6 +9,7 @@ import type {
   BackendModuleResponseDto,
   BackendPermissionResponseDto,
   BackendPasswordRecoverySettingsResponseDto,
+  BackendPrincipalSettingsResponseDto,
   BackendSchoolSettingsResponseDto,
   BackendEmailSmtpSettingsResponseDto,
   BackendEmailTemplateResponseDto,
@@ -44,6 +45,7 @@ import type {
   EmailTemplateKey,
   ForgotPasswordMethod,
   PasswordRecoverySettings,
+  PrincipalSettings,
   SchoolSettings,
 } from "@/app/types/systemTypes";
 
@@ -1109,6 +1111,17 @@ function mapBackendPasswordRecoverySettings(
   };
 }
 
+function mapBackendPrincipalSettings(
+  settings: BackendPrincipalSettingsResponseDto,
+): PrincipalSettings {
+  return {
+    active_principal_user_id: settings.activePrincipalUserId,
+    active_principal_name: settings.activePrincipalName,
+    active_principal_email: settings.activePrincipalEmail,
+    active_principal_position: settings.activePrincipalPosition,
+  };
+}
+
 export function createAuthSession(
   token: string,
   user: AdminUser,
@@ -1732,6 +1745,24 @@ export async function updatePasswordRecoverySettings(
   );
 
   return mapBackendPasswordRecoverySettings(settings);
+}
+
+export async function getPrincipalSettings(token?: string) {
+  const settings = await requestAuthenticatedApi<BackendPrincipalSettingsResponseDto>("/system/principal", {
+    token,
+  });
+
+  return mapBackendPrincipalSettings(settings);
+}
+
+export async function updatePrincipalSettings(activePrincipalUserId: number | null, token?: string) {
+  const settings = await requestAuthenticatedApi<BackendPrincipalSettingsResponseDto>("/system/principal", {
+    method: "PUT",
+    body: { activePrincipalUserId },
+    token,
+  });
+
+  return mapBackendPrincipalSettings(settings);
 }
 
 export async function listEmailTemplates(templateKey?: EmailTemplateKey, token?: string) {
