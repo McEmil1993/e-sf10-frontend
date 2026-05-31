@@ -10,6 +10,12 @@ BASE_API=http://localhost:5555/api
 BASE_URL=http://localhost:5555
 PUPIL_ROUTE_SECRET=953a1afeaa9d4641ba07c5467ff79b95
 ```
+Then, install node
+```bash
+npm i
+# or
+npm install
+```
 
 Then, run the development server:
 
