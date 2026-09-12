@@ -17,6 +17,7 @@ export function createAcademicRecord(
   });
 }
 
+
 export function updateAcademicRecord(
   entity: AcademicEntityKey,
   recordId: number,
