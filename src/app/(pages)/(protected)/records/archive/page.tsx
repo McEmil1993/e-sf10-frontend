@@ -16,6 +16,8 @@ type TableRow = Record<string, string | number>;
 
 // --- STATIC MOCK DATA ---
 const MOCK_ARCHIVE_DATA: Record<string, AcademicRecord[]> = {
+
+  
   "school-years": [
     { id: 101, name: "2023-2024", startDate: "2023-06-01", endDate: "2024-03-30", isActive: "false", deletedAt: "2024-04-01T10:00:00Z" },
     { id: 102, name: "2022-2023", startDate: "2022-06-01", endDate: "2023-03-30", isActive: "false", deletedAt: "2023-04-01T10:00:00Z"  },
